@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Swiss Electricity Price (ElCom)",
+        "description": "Suche deinen Netzbetreiber nach Name (z.B. Teil des Firmen- oder Gemeindenamens) und sende ab — {count} werden unten angezeigt. Um die Suche zu verfeinern, ändere den Suchtext und sende erneut ab. Betreiber mit \"direkter Link\" haben eine maschinenlesbare Tarifdatei, die soeben als erreichbar geprüft wurde; Betreiber mit \"Auto-Erkennung\" melden entweder nur eine allgemeine Webseite, oder ihre gemeldete Datei konnte nicht geprüft werden — ihre Tarifdaten werden möglicherweise nicht automatisch gefunden. Falls der Link deines Betreibers trotzdem nicht funktioniert: Betreiber auswählen und die tatsächliche Tarifdatei-URL unter \"Manuelle Tarifdatei-URL\" einfügen (auf der Webseite des Betreibers zu finden — es ist eine JSON-Datei, suche nach \"Tarif\" im Seiteninhalt oder in den Links). Falls beides nicht klappt, kannst du auf dem nächsten Bildschirm deine Tarife von Hand eingeben — dann musst du hier keine URL eintragen.",
+        "data": {
+          "operator_search": "Betreibername",
+          "operator_id": "Netzbetreiber",
+          "manual_url": "Manuelle Tarifdatei-URL (optional)"
+        }
+      },
+      "location": {
+        "title": "{operator}",
+        "description": "Wähle deine Gemeinde sowie dein Energie- und Netz-Tarifprodukt, genau wie von {operator} veröffentlicht. Beide werden separat gewählt (statt ein kombinierter \"Tarif\"), da Betreiber ihre Energie- und Netz-Produkte nicht immer gleich benennen oder einordnen.",
+        "data": {
+          "municipality": "Gemeinde",
+          "energy_product": "Energie-Tarifprodukt",
+          "grid_product": "Netz-Tarifprodukt"
+        }
+      },
+      "manual": {
+        "title": "{operator}",
+        "description": "Für {operator} konnte keine nutzbare Tarifdatei gefunden werden — weder der registrierte Link noch eine von dir angegebene URL hat funktioniert (oder es gab keine brauchbaren Daten darin). Gib stattdessen deine bekannten Tarife von Hand ein; du findest sie auf deiner Stromrechnung oder im Preisblatt des Betreibers.",
+        "data": {
+          "manual_high_rp": "Hochtarif-Preis (Rp/kWh)",
+          "manual_low_rp": "Niedertarif-Preis (Rp/kWh, optional — leer lassen für Einheitstarif)",
+          "manual_high_from": "Hochtarif beginnt um (HH:MM)",
+          "manual_high_to": "Hochtarif endet um (HH:MM)",
+          "manual_high_weekdays": "Hochtarif gilt an",
+          "manual_grid_fee_chf": "Monatliche Grundgebühr (CHF/Monat, optional)"
+        }
+      }
+    },
+    "abort": {
+      "cannot_connect": "Das ElCom-Betreiberverzeichnis konnte nicht abgerufen werden.",
+      "no_data": "Keine Tarifdaten für diesen Betreiber gefunden."
+    },
+    "error": {
+      "cannot_connect": "Das ElCom-Betreiberverzeichnis konnte nicht abgerufen werden.",
+      "no_matches": "Kein Betreiber entspricht dieser Suche. Ändere den Suchtext oben und sende erneut ab.",
+      "manual_url_needs_operator": "Es wurde eine manuelle URL eingegeben, aber kein Betreiber ausgewählt. Bitte wähle zusätzlich den Betreiber aus, zu dem diese URL gehört.",
+      "invalid_time": "Bitte Uhrzeiten im Format HH:MM eingeben (z.B. 06:00)."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Strompreis-Einstellungen",
+        "data": {
+          "national_levies_rp": "Nationale Stromabgaben (Rp/kWh)",
+          "vat_percent": "MWST-Satz (%)"
+        }
+      }
+    }
+  },
+  "issues": {
+    "manual_link_available": {
+      "title": "Für {operator} wurde eine funktionierende Tarifdatei gefunden",
+      "description": "Dieser Eintrag wurde mit manuell eingegebenen Tarifen eingerichtet, weil damals keine nutzbare Tarifdatei für {operator} gefunden werden konnte. Inzwischen ist eine funktionierende maschinenlesbare Tarifdatei verfügbar. Um von der manuellen Eingabe auf vollautomatische Tarife umzusteigen (inkl. Gemeinde- und Grundgebühr-Sensoren), entferne diesen Integrations-Eintrag und richte ihn neu ein — der Betreiber-Link sollte jetzt beim ersten Versuch funktionieren."
+    }
+  }
+}

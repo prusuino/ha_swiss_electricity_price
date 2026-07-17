@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Swiss Electricity Price (ElCom)",
+        "description": "Cerca il tuo gestore di rete per nome (ad es. parte del nome dell'azienda o del comune) e invia — {count} mostrati sotto. Per affinare, modifica il testo di ricerca e invia di nuovo. Gli operatori contrassegnati con \"link diretto\" hanno un file tariffario leggibile da macchina la cui raggiungibilità è appena stata verificata; gli operatori contrassegnati con \"rilevamento automatico\" comunicano solo una pagina web generica, oppure il file dichiarato non è stato possibile verificarlo — i loro dati tariffari potrebbero non essere trovati automaticamente. Se il link del tuo operatore non funziona comunque: seleziona l'operatore e incolla l'URL reale del file tariffario in \"URL manuale del file tariffario\" (si trova sul sito web dell'operatore — è un file JSON, cerca \"tariffa\" nel contenuto della pagina o nei link). Se nessuno dei due funziona, nella schermata successiva potrai inserire le tue tariffe manualmente — non serve indicare un URL qui.",
+        "data": {
+          "operator_search": "Nome dell'operatore",
+          "operator_id": "Gestore di rete",
+          "manual_url": "URL manuale del file tariffario (opzionale)"
+        }
+      },
+      "location": {
+        "title": "{operator}",
+        "description": "Scegli il tuo comune e i tuoi prodotti tariffari energia e rete, esattamente come pubblicati da {operator}. Vengono scelti separatamente (invece di un'unica \"tariffa\" combinata), poiché gli operatori non denominano né classificano sempre allo stesso modo i loro prodotti energia e rete.",
+        "data": {
+          "municipality": "Comune",
+          "energy_product": "Prodotto tariffario energia",
+          "grid_product": "Prodotto tariffario rete"
+        }
+      },
+      "manual": {
+        "title": "{operator}",
+        "description": "Non è stato possibile trovare un file tariffario utilizzabile per {operator} — né il link registrato né un URL da te fornito hanno funzionato (oppure non conteneva dati utilizzabili). Inserisci invece le tue tariffe conosciute manualmente; le trovi sulla tua bolletta elettrica o nel listino prezzi dell'operatore.",
+        "data": {
+          "manual_high_rp": "Prezzo tariffa alta (Rp/kWh)",
+          "manual_low_rp": "Prezzo tariffa bassa (Rp/kWh, opzionale — lascia vuoto per tariffa unica)",
+          "manual_high_from": "La tariffa alta inizia alle (HH:MM)",
+          "manual_high_to": "La tariffa alta termina alle (HH:MM)",
+          "manual_high_weekdays": "La tariffa alta si applica il",
+          "manual_grid_fee_chf": "Tassa di base mensile (CHF/mese, opzionale)"
+        }
+      }
+    },
+    "abort": {
+      "cannot_connect": "Non è stato possibile recuperare l'elenco degli operatori ElCom.",
+      "no_data": "Nessun dato tariffario trovato per questo operatore."
+    },
+    "error": {
+      "cannot_connect": "Non è stato possibile recuperare l'elenco degli operatori ElCom.",
+      "no_matches": "Nessun operatore corrisponde a questa ricerca. Modifica il testo di ricerca sopra e invia di nuovo.",
+      "manual_url_needs_operator": "È stata inserita un'URL manuale ma non è stato selezionato alcun operatore. Seleziona anche l'operatore a cui appartiene questa URL.",
+      "invalid_time": "Inserisci gli orari nel formato HH:MM (ad es. 06:00)."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Impostazioni prezzo dell'elettricità",
+        "data": {
+          "national_levies_rp": "Oneri nazionali sull'elettricità (Rp/kWh)",
+          "vat_percent": "Aliquota IVA (%)"
+        }
+      }
+    }
+  },
+  "issues": {
+    "manual_link_available": {
+      "title": "È stato trovato un file tariffario funzionante per {operator}",
+      "description": "Questa voce è stata configurata con tariffe inserite manualmente perché all'epoca non era stato possibile trovare un file tariffario utilizzabile per {operator}. Ora è disponibile un file tariffario leggibile da macchina funzionante. Per passare dall'inserimento manuale alle tariffe completamente automatiche (con sensori di comune e tassa di base), rimuovi questa voce di integrazione e configurala di nuovo — il link dell'operatore dovrebbe ora funzionare al primo tentativo."
+    }
+  }
+}

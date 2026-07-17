@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Swiss Electricity Price (ElCom)",
+        "description": "Recherchez votre gestionnaire de réseau par nom (p. ex. une partie du nom de l'entreprise ou de la commune) et validez — {count} affiché(s) ci-dessous. Pour affiner, modifiez le texte de recherche et validez à nouveau. Les opérateurs marqués « lien direct » ont un fichier tarifaire lisible par machine dont l'accessibilité vient d'être vérifiée ; les opérateurs marqués « détection automatique » ne déclarent qu'une page web générale, ou leur fichier déclaré n'a pas pu être vérifié — leurs données tarifaires pourraient ne pas être trouvées automatiquement. Si le lien de votre opérateur ne fonctionne toujours pas : sélectionnez l'opérateur et collez l'URL réelle du fichier tarifaire sous « URL manuelle du fichier tarifaire » (à trouver sur le site de l'opérateur — c'est un fichier JSON, cherchez « tarif » dans le contenu ou les liens de la page). Si aucun des deux ne fonctionne, vous pourrez saisir vos tarifs manuellement à l'écran suivant — inutile de renseigner une URL ici.",
+        "data": {
+          "operator_search": "Nom de l'opérateur",
+          "operator_id": "Gestionnaire de réseau",
+          "manual_url": "URL manuelle du fichier tarifaire (facultatif)"
+        }
+      },
+      "location": {
+        "title": "{operator}",
+        "description": "Choisissez votre commune ainsi que votre produit tarifaire énergie et réseau, tels que publiés par {operator}. Les deux sont choisis séparément (plutôt qu'un \"tarif\" combiné), car les opérateurs ne nomment ni ne classent toujours leurs produits énergie et réseau de la même façon.",
+        "data": {
+          "municipality": "Commune",
+          "energy_product": "Produit tarifaire énergie",
+          "grid_product": "Produit tarifaire réseau"
+        }
+      },
+      "manual": {
+        "title": "{operator}",
+        "description": "Aucun fichier tarifaire utilisable n'a pu être trouvé pour {operator} — ni le lien enregistré ni une URL que vous avez fournie n'a fonctionné (ou il n'y avait pas de données utilisables dedans). Saisissez plutôt vos tarifs connus manuellement ; vous les trouverez sur votre facture d'électricité ou la grille tarifaire de l'opérateur.",
+        "data": {
+          "manual_high_rp": "Prix tarif haut (Rp/kWh)",
+          "manual_low_rp": "Prix tarif bas (Rp/kWh, facultatif — laisser vide pour un tarif unique)",
+          "manual_high_from": "Le tarif haut commence à (HH:MM)",
+          "manual_high_to": "Le tarif haut se termine à (HH:MM)",
+          "manual_high_weekdays": "Le tarif haut s'applique le",
+          "manual_grid_fee_chf": "Redevance de base mensuelle (CHF/mois, facultatif)"
+        }
+      }
+    },
+    "abort": {
+      "cannot_connect": "L'annuaire des opérateurs ElCom n'a pas pu être récupéré.",
+      "no_data": "Aucune donnée tarifaire trouvée pour cet opérateur."
+    },
+    "error": {
+      "cannot_connect": "L'annuaire des opérateurs ElCom n'a pas pu être récupéré.",
+      "no_matches": "Aucun opérateur ne correspond à cette recherche. Modifiez le texte de recherche ci-dessus et validez à nouveau.",
+      "manual_url_needs_operator": "Une URL manuelle a été saisie mais aucun opérateur n'a été sélectionné. Veuillez aussi sélectionner l'opérateur auquel appartient cette URL.",
+      "invalid_time": "Veuillez saisir les heures au format HH:MM (p. ex. 06:00)."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Paramètres du prix de l'électricité",
+        "data": {
+          "national_levies_rp": "Redevances nationales sur l'électricité (Rp/kWh)",
+          "vat_percent": "Taux de TVA (%)"
+        }
+      }
+    }
+  },
+  "issues": {
+    "manual_link_available": {
+      "title": "Un fichier tarifaire fonctionnel a été trouvé pour {operator}",
+      "description": "Cette entrée a été configurée avec des tarifs saisis manuellement car aucun fichier tarifaire utilisable n'avait pu être trouvé pour {operator} à l'époque. Un fichier tarifaire lisible par machine fonctionnel est maintenant disponible. Pour passer de la saisie manuelle aux tarifs entièrement automatiques (avec les capteurs de commune et de redevance de base), supprimez cette entrée d'intégration et reconfigurez-la — le lien de l'opérateur devrait maintenant fonctionner du premier coup."
+    }
+  }
+}
