@@ -1,6 +1,6 @@
 # Swiss Electricity Price (ElCom)
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 <a href="https://www.buymeacoffee.com/prusuino"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="20"></a>
 
@@ -31,7 +31,11 @@ All entities are created dynamically from the selected operator's own live JSON 
 | `number.elcom_<operator>_national_levies` | National electricity levies (Rp/kWh), directly adjustable. Default 3.03. |
 | `number.elcom_<operator>_vat_percent` | VAT rate (%), directly adjustable. Default 8.1. |
 
-Data updates every 24 hours (tariffs only change once a year). Multiple instances are supported — add one per operator/municipality/tariff combination you want to track.
+`<operator>` is the operator's name as listed in ElCom's registry, slugified; `<product>`, `<type>` and `<municipality>` are the operator's own product, metering-fee and municipality names from its tariff file, slugified the same way. These ids are set by the integration and do not depend on your Home Assistant language — only the displayed names are translated ("Current Electricity Price" on an English instance, "Strompreis aktuell" on a German one), the object id is `..._price_current` on both. They are the ids suggested when an entity is first created; any entity can be renamed in its settings at any time.
+
+Because the ids carry only the operator, a second entry for the same operator (another municipality or another tariff product) gets its ids suffixed with `_2` — `sensor.elcom_<operator>_price_current_2` — and an automation copied from the first entry silently keeps addressing the first one. This is best avoided: set up one entry per operator, or rename the second entry's entities right after adding it.
+
+Data updates every 24 hours (tariffs only change once a year). Multiple instances are supported — add one per operator you want to track (see the note on entity ids above before adding the same operator twice).
 
 Operators re-report to ElCom annually, and some leave an old file in place rather than replacing it in place for the new year — so on every update, the operator's current ElCom registration is re-checked (and the stored link corrected automatically if it changed), and the actual tariff-file link is freshly re-discovered rather than reused from a cached value, so a changed filename behind an unchanged page is picked up too. A user-supplied manual URL override is never touched by any of this, since it was chosen specifically to bypass a broken registration.
 
@@ -45,9 +49,13 @@ Requires Home Assistant **2024.12.0** or newer.
 
 ### HACS (recommended)
 
-1. In HACS, go to **Integrations → ⋮ → Custom repositories**, add this repository URL with category **Integration**.
-2. Search for **"Swiss Electricity Price"** and install.
-3. Restart Home Assistant.
+1. Open **HACS**, search for **"Swiss Electricity Price"** and download it — or use the button, which opens the integration directly in your HACS:
+
+   [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=prusuino&repository=ha_swiss_electricity_price&category=integration)
+
+2. Restart Home Assistant.
+
+Until the integration shows up in the HACS search, the button above adds it as a custom repository.
 
 ### Manual
 
@@ -71,7 +79,7 @@ A manual entry is also re-checked once a day in the background: if the operator'
 
 ## Notes
 
-- Can be added multiple times, once per operator/municipality/energy-product/grid-product combination; setting one up a second time is rejected instead of silently creating a duplicate.
+- Can be added multiple times, once per operator/municipality/energy-product/grid-product combination; setting one up a second time is rejected instead of silently creating a duplicate. Two entries for the same operator share their entity ids (see [What it provides](#what-it-provides)) — prefer one entry per operator.
 - If an operator's tariff file is unreachable, or its format changes, its entities become `unavailable` rather than reporting a stale or incorrect value.
 - This integration is unofficial and not affiliated with ElCom or any Swiss grid operator. It only reads publicly published Open Data.
 - Coverage depends entirely on the quality of each operator's own registration with ElCom — this integration cannot fix a broken or missing link reported by the operator itself.
