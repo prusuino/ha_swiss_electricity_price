@@ -33,11 +33,11 @@
       }
     },
     "abort": {
+      "already_configured": "Dieser Netzbetreiber ist mit derselben Gemeinde und denselben Tarifprodukten bereits eingerichtet (oder hat bereits einen manuellen Eintrag).",
       "cannot_connect": "Das ElCom-Betreiberverzeichnis konnte nicht abgerufen werden.",
-      "no_data": "Keine Tarifdaten für diesen Betreiber gefunden."
+      "no_data": "Das ElCom-Betreiberverzeichnis enthält für das laufende Jahr keine Betreiber."
     },
     "error": {
-      "cannot_connect": "Das ElCom-Betreiberverzeichnis konnte nicht abgerufen werden.",
       "no_matches": "Kein Betreiber entspricht dieser Suche. Ändere den Suchtext oben und sende erneut ab.",
       "manual_url_needs_operator": "Es wurde eine manuelle URL eingegeben, aber kein Betreiber ausgewählt. Bitte wähle zusätzlich den Betreiber aus, zu dem diese URL gehört.",
       "invalid_time": "Bitte Uhrzeiten im Format HH:MM eingeben (z.B. 06:00)."

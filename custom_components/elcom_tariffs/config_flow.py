@@ -16,6 +16,7 @@ choosing.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -53,8 +54,14 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import WEEKDAY_ABBR, async_fetch_raw_tariffs
-from .directory import async_fetch_operator_directory, async_resolve_tariff_url
+from .directory import (
+    async_fetch_operator_directory,
+    async_resolve_tariff_url,
+    async_verify_direct_links,
+)
 from .localization import t
+
+_LOGGER = logging.getLogger(__name__)
 
 CONF_OPERATOR_SEARCH = "operator_search"
 CONF_MANUAL_URL = "manual_url"
@@ -113,14 +120,29 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
         self._matches: list[dict] = []
         self._selected: dict | None = None
         self._raw: dict | None = None
+        self._verified: set[str] = set()
+
+    async def _async_verify_matches(self) -> None:
+        """Live-check the direct links of the operators about to be shown
+        (at most _MAX_RESULTS), not the whole ~600-operator directory:
+        verifying everything up front meant one GET against every
+        operator's host as soon as the dialog opened, just to label
+        entries the user never scrolls to. Each operator is checked at
+        most once per flow."""
+        pending = [o for o in self._matches if o["id"] not in self._verified]
+        if not pending:
+            return
+        await async_verify_direct_links(self.hass, pending)
+        self._verified.update(o["id"] for o in pending)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
 
         if not self._operators:
             try:
-                self._operators = await async_fetch_operator_directory(self.hass)
-            except Exception:
+                self._operators = await async_fetch_operator_directory(self.hass, verify=False)
+            except Exception as err:  # noqa: BLE001 - any failure ends the flow with the same abort
+                _LOGGER.debug("ElCom operator directory could not be retrieved: %s", err)
                 return self.async_abort(reason="cannot_connect")
             if not self._operators:
                 return self.async_abort(reason="no_data")
@@ -153,10 +175,11 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                     try:
                         resolved_url = await async_resolve_tariff_url(self.hass, url_to_use)
                         self._raw = await async_fetch_raw_tariffs(self.hass, resolved_url)
-                    except Exception:
+                    except Exception as err:  # noqa: BLE001 - any failure leads to the manual fallback
                         # Neither the operator's registered link nor a supplied
                         # manual URL worked — offer manual rate entry instead
                         # of a dead-end error.
+                        _LOGGER.debug("Tariff file for %s not usable via %s: %s", operator["name"], url_to_use, err)
                         self._selected = {**operator, "url": url_to_use, "resolved_url": None}
                         return await self.async_step_manual()
                     else:
@@ -180,6 +203,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
 
         fields: dict[Any, Any] = {vol.Optional(CONF_OPERATOR_SEARCH, default=query): str}
         if self._matches:
+            await self._async_verify_matches()
             options = [
                 SelectOptionDict(
                     value=o["id"],

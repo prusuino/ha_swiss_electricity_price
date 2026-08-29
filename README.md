@@ -18,24 +18,32 @@ All entities are created dynamically from the selected operator's own live JSON 
 
 | Entity | Description |
 |---|---|
-| `sensor.elcom_<operator>_<product>` | All energy and grid tariff products the operator publishes. State = currently active Rp/kWh rate (automatic high/low tariff switching by weekday + time, where applicable). Attribute `schedule` lists all time windows. |
-| `sensor.elcom_<operator>_<product>_high` / `_low` | Fixed high-tariff / low-tariff reference price for each product, independent of the current time. Only created for products with more than one price level. |
-| `sensor.elcom_<operator>_<type>` | Metering fees (CHF/month, flat rate), if published. |
-| `sensor.elcom_<operator>_municipality_levy_<municipality>` | Municipal surcharge (Rp/kWh) for each municipality the operator serves. |
-| `sensor.elcom_<operator>_tariff_level` | Whether **your configured energy tariff** is currently on high or low tariff. |
-| `sensor.elcom_<operator>_price_current` | Combined current price for your configured municipality + energy/grid tariff products, including national levies and VAT. Attribute `calculation` spells out the full calculation in plain text. |
-| `sensor.elcom_<operator>_price_high` / `_low` | Fixed combined high-tariff / low-tariff price (same formula, at the fixed rate instead of the currently active one). |
-| `sensor.elcom_<operator>_diagnostics_host` / `_path` / `_filename` | Where the operator's tariff file is currently being fetched from — split into host, directory, and file name so each fits the diagnostics card. The full URL and the ElCom-registered URL are available as attributes on the host sensor. |
-| `sensor.elcom_<operator>_diagnostics_year` | The tariff data's own validity year (from the file's `startDate`, not any date that happens to appear in the file name — operators often publish next year's tariffs months in advance). |
-| `sensor.elcom_<operator>_diagnostics_last_checked` | When the tariff file was last successfully fetched and parsed. |
-| `number.elcom_<operator>_national_levies` | National electricity levies (Rp/kWh), directly adjustable. Default 3.03. |
-| `number.elcom_<operator>_vat_percent` | VAT rate (%), directly adjustable. Default 8.1. |
+| `sensor.elcom_<operator>_<id>_energy_<product>` / `..._grid_<product>` | All energy and grid tariff products the operator publishes. State = the Rp/kWh rate active right now, with automatic high/low tariff switching by weekday + time where applicable — the state changes at the minute a tariff window starts or ends (e.g. 22:00 and 06:00). Attribute `schedule` lists all time windows. |
+| `..._energy_<product>_high` / `_low` (likewise for `grid`) | Fixed high-tariff / low-tariff reference price for each product, independent of the current time. Only created for products with more than one price level. |
+| `sensor.elcom_<operator>_<id>_metering_<type>` | Metering fees (CHF/month, flat rate), if published. |
+| `sensor.elcom_<operator>_<id>_municipality_levy_<municipality>` | Municipal surcharge (Rp/kWh) for each municipality the operator serves. |
+| `sensor.elcom_<operator>_<id>_tariff_level` | Whether **your configured energy tariff** is currently on high or low tariff. |
+| `sensor.elcom_<operator>_<id>_price_current` | Combined current price for your configured municipality + energy/grid tariff products, including national levies and VAT, at the rates active right now. Attribute `calculation` spells out the full calculation in plain text. |
+| `sensor.elcom_<operator>_<id>_price_high` / `_low` | Fixed combined high-tariff / low-tariff price (same formula, at the fixed rate instead of the currently active one). |
+| `sensor.elcom_<operator>_<id>_diagnostics_host` / `_path` / `_filename` | Where the operator's tariff file is currently being fetched from — split into host, directory, and file name so each fits the diagnostics card. The full URL and the ElCom-registered URL are available as attributes on the host sensor. |
+| `sensor.elcom_<operator>_<id>_diagnostics_year` | The tariff data's own validity year, read from the tariff file's `startDate`. Only if the data carries no `startDate` does it fall back to a year found in the file name — operators often publish next year's tariffs months in advance, so the two can disagree. |
+| `sensor.elcom_<operator>_<id>_diagnostics_last_checked` | When the tariff file was last successfully fetched and parsed. |
+| `number.elcom_<operator>_<id>_national_levies` | National electricity levies (Rp/kWh), directly adjustable. Default 3.03. |
+| `number.elcom_<operator>_<id>_vat_percent` | VAT rate (%), directly adjustable. Default 8.1. |
 
-`<operator>` is the operator's name as listed in ElCom's registry, slugified; `<product>`, `<type>` and `<municipality>` are the operator's own product, metering-fee and municipality names from its tariff file, slugified the same way. These ids are set by the integration and do not depend on your Home Assistant language — only the displayed names are translated ("Current Electricity Price" on an English instance, "Strompreis aktuell" on a German one), the object id is `..._price_current` on both. They are the ids suggested when an entity is first created; any entity can be renamed in its settings at any time.
+A manual-rate entry (see [If no link works at all](#if-no-link-works-at-all)) has no tariff file to break down and gets this smaller set instead:
 
-Because the ids carry only the operator, a second entry for the same operator (another municipality or another tariff product) gets its ids suffixed with `_2` — `sensor.elcom_<operator>_price_current_2` — and an automation copied from the first entry silently keeps addressing the first one. This is best avoided: set up one entry per operator, or rename the second entry's entities right after adding it.
+| Entity | Description |
+|---|---|
+| `sensor.elcom_<operator>_<id>_price_current` | Combined current price from the entered rates, including national levies and VAT — the high or low rate depending on the entered time window and weekdays, switching at the minute. |
+| `sensor.elcom_<operator>_<id>_tariff_level` | Whether the entered tariff is currently on high or low tariff. Only created when a low-tariff rate was entered. |
+| `sensor.elcom_<operator>_<id>_price_high` / `_low` | Fixed combined high-tariff / low-tariff price. Only created when a low-tariff rate was entered. |
+| `sensor.elcom_<operator>_<id>_base_fee` | The entered monthly base/grid fee (CHF/month). Only created when a fee was entered. |
+| `number.elcom_<operator>_<id>_national_levies` / `_vat_percent` | As above. |
 
-Data updates every 24 hours (tariffs only change once a year). Multiple instances are supported — add one per operator you want to track (see the note on entity ids above before adding the same operator twice).
+`<operator>` is the operator's name as listed in ElCom's registry, slugified; `<id>` is a short per-entry code (the last four characters of the entry's internal id) that keeps several entries for the same operator — another municipality, another tariff product, or a manual entry next to an automatic one — apart; `<product>`, `<type>` and `<municipality>` are the operator's own product, metering-fee and municipality names from its tariff file, slugified the same way. These ids are set by the integration and do not depend on your Home Assistant language — only the displayed names are translated ("Current Electricity Price" on an English instance, "Strompreis aktuell" on a German one), the object id is `..._price_current` on both. They are the ids suggested when an entity is first created; any entity can be renamed in its settings at any time. Entities created by a version before 1.4.0 keep the ids they already have (`sensor.elcom_<operator>_price_current`, without the per-entry code and product category), so nothing changes for existing automations and dashboards.
+
+Data updates every 24 hours (tariffs only change once a year); the high/low switch itself does not wait for that — the active window is resolved against the clock whenever a sensor is read, and the sensors are refreshed at each window boundary. Products, metering fees and municipalities that appear in the operator's file later on are added automatically at the next update; an entity whose product has disappeared from the file reports `unavailable` and is kept rather than deleted, so it comes back on its own if the product does. Multiple instances are supported — add one per operator, municipality and tariff-product combination you want to track.
 
 Operators re-report to ElCom annually, and some leave an old file in place rather than replacing it in place for the new year — so on every update, the operator's current ElCom registration is re-checked (and the stored link corrected automatically if it changed), and the actual tariff-file link is freshly re-discovered rather than reused from a cached value, so a changed filename behind an unchanged page is picked up too. A user-supplied manual URL override is never touched by any of this, since it was chosen specifically to bypass a broken registration.
 
@@ -73,14 +81,14 @@ Until the integration shows up in the HACS search, the button above adds it as a
 
 ### If no link works at all
 
-If neither the registered link nor a manual URL can be resolved, you're automatically offered a fallback screen instead of a dead end: enter your high-tariff and (optional) low-tariff rate by hand, the daily time window the high tariff applies in, which weekdays it applies on, and an optional monthly base/grid fee — found on your electricity bill or the operator's rate sheet. You still get a current-price sensor, high/low reference sensors, and adjustable national levies/VAT, just without the municipality- and product-level breakdown that only the operator's own file provides.
+If neither the registered link nor a manual URL can be resolved, you're automatically offered a fallback screen instead of a dead end: enter your high-tariff and (optional) low-tariff rate by hand, the daily time window the high tariff applies in, which weekdays it applies on, and an optional monthly base/grid fee — found on your electricity bill or the operator's rate sheet. You still get a current-price sensor, a tariff-level sensor, high/low reference sensors, an optional base-fee sensor and adjustable national levies/VAT, just without the municipality- and product-level breakdown that only the operator's own file provides.
 
-A manual entry is also re-checked once a day in the background: if the operator's own tariff file starts working, a repair notification (Settings → System → Repairs) tells you so. Municipality and tariff products still need to be picked by hand, so switching over means removing and re-adding the integration entry rather than an automatic in-place upgrade — but the operator's link should then resolve on the first try.
+A manual entry is also re-checked once a day in the background: if the operator's own tariff file starts working, a repair notification (Settings → System → Repairs) tells you so, and it is withdrawn again should the link stop working or the entry be removed. Municipality and tariff products still need to be picked by hand, so switching over means removing and re-adding the integration entry rather than an automatic in-place upgrade — but the operator's link should then resolve on the first try.
 
 ## Notes
 
-- Can be added multiple times, once per operator/municipality/energy-product/grid-product combination; setting one up a second time is rejected instead of silently creating a duplicate. Two entries for the same operator share their entity ids (see [What it provides](#what-it-provides)) — prefer one entry per operator.
-- If an operator's tariff file is unreachable, or its format changes, its entities become `unavailable` rather than reporting a stale or incorrect value.
+- Can be added multiple times, once per operator/municipality/energy-product/grid-product combination; setting one up a second time is rejected instead of silently creating a duplicate. Every entry's entity ids carry their own per-entry code (see [What it provides](#what-it-provides)), so several entries for the same operator do not collide.
+- If an operator's tariff file is unreachable, or its format changes, its entities become `unavailable` rather than reporting a stale or incorrect value — as does a single product's sensor once that product is no longer in the file.
 - This integration is unofficial and not affiliated with ElCom or any Swiss grid operator. It only reads publicly published Open Data.
 - Coverage depends entirely on the quality of each operator's own registration with ElCom — this integration cannot fix a broken or missing link reported by the operator itself.
 

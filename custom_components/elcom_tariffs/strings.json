@@ -33,11 +33,11 @@
       }
     },
     "abort": {
+      "already_configured": "This grid operator is already configured with the same municipality and tariff products (or already has a manual entry).",
       "cannot_connect": "The ElCom operator directory could not be retrieved.",
-      "no_data": "No tariff data found for this operator."
+      "no_data": "The ElCom operator directory contains no operators for the current year."
     },
     "error": {
-      "cannot_connect": "The ElCom operator directory could not be retrieved.",
       "no_matches": "No operator matches that search. Change the search text above and submit again.",
       "manual_url_needs_operator": "A manual URL was entered but no operator was selected. Please also select the operator this URL belongs to.",
       "invalid_time": "Please enter times in HH:MM format (e.g. 06:00)."

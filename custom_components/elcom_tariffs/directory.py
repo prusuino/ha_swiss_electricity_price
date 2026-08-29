@@ -10,19 +10,19 @@ a working direct link to the JSON file, others only their general company
 website, and — importantly — some report a URL ending in .json that is
 simply dead (moved, removed, or never valid) since ElCom does not itself
 verify what operators report. A URL merely *looking* like a direct JSON
-link is therefore not a reliable signal on its own, so the directory is
-live-verified (HEAD request) before being labeled — see
-async_fetch_operator_directory() and resolve_tariff_url() below.
+link is therefore not a reliable signal on its own, so direct links are
+live-verified (a GET that sniffs the start of the body) before being
+labeled — see async_verify_direct_links() and resolve_tariff_url() below.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import re
-from datetime import date
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util import dt as dt_util
 
 from .const import LINDAS_SPARQL_URL
 
@@ -74,12 +74,31 @@ async def _verify_reachable(session, url: str) -> bool:
     try:
         async with session.get(url, timeout=_VERIFY_TIMEOUT_SECONDS, allow_redirects=True) as resp:
             if resp.status >= 400:
+                _LOGGER.debug("Registered link %s answered HTTP %s", url, resp.status)
                 return False
             chunk = await resp.content.read(200)
-    except Exception:
+    except Exception as err:  # noqa: BLE001 - any failure simply means "not a usable direct link"
+        _LOGGER.debug("Registered link %s not reachable: %s", url, err)
         return False
     text = chunk.lstrip()
     return text[:1] in (b"{", b"[")
+
+
+async def async_verify_direct_links(hass: HomeAssistant, operators: list[dict]) -> None:
+    """Live-check the given operators' registered links (only those that
+    look like direct JSON links) and clear likely_direct where the check
+    fails. Mutates the dicts in place. Meant to be called for the handful
+    of operators about to be shown, not for the whole directory — every
+    check is one GET against that operator's own host."""
+    session = async_get_clientsession(hass)
+    semaphore = asyncio.Semaphore(_VERIFY_CONCURRENCY)
+    candidates = [o for o in operators if o["likely_direct"]]
+
+    async def _check(op: dict) -> None:
+        async with semaphore:
+            op["likely_direct"] = await _verify_reachable(session, _with_scheme(op["url"]))
+
+    await asyncio.gather(*(_check(op) for op in candidates))
 
 
 async def async_fetch_operator_directory(
@@ -90,16 +109,18 @@ async def async_fetch_operator_directory(
 
     Returns a list of dicts: id (ElCom operator IRI), uid (Swiss company UID),
     name, url (as registered — may or may not be a direct JSON link), and
-    likely_direct (bool). When verify=True (default), any URL that looks
-    like a direct JSON link is live-checked with a HEAD/GET request and
-    likely_direct only stays True if that check actually succeeds — a URL
-    shape alone is not a reliable signal, see module docstring. Operators
-    without a direct link may still work via resolve_tariff_url()'s scrape
-    fallback, or may not work at all; for those, likely_direct is always
-    False without a live check (would require fetching and scanning every
-    operator's page, which is far more expensive).
+    likely_direct (bool). When verify=True, any URL that looks like a direct
+    JSON link is live-checked with a GET request and likely_direct only
+    stays True if that check actually succeeds — a URL shape alone is not a
+    reliable signal, see module docstring. The config flow passes
+    verify=False and verifies only the operators it shows, via
+    async_verify_direct_links(). Operators without a direct link may still
+    work via resolve_tariff_url()'s scrape fallback, or may not work at all;
+    for those, likely_direct is always False without a live check (would
+    require fetching and scanning every operator's page, which is far more
+    expensive).
     """
-    year = year or date.today().year
+    year = year or dt_util.now().year
     session = async_get_clientsession(hass)
     query = _DIRECTORY_QUERY.format(year=year)
     headers = {
@@ -124,14 +145,7 @@ async def async_fetch_operator_directory(
         }
 
     if verify:
-        semaphore = asyncio.Semaphore(_VERIFY_CONCURRENCY)
-        candidates = [o for o in operators.values() if o["likely_direct"]]
-
-        async def _check(op: dict) -> None:
-            async with semaphore:
-                op["likely_direct"] = await _verify_reachable(session, _with_scheme(op["url"]))
-
-        await asyncio.gather(*(_check(op) for op in candidates))
+        await async_verify_direct_links(hass, list(operators.values()))
 
     return sorted(operators.values(), key=lambda o: o["name"].lower())
 
@@ -162,7 +176,7 @@ async def async_fetch_operator_url(
     used to periodically re-check for a newer/changed registration without
     re-fetching the entire ~600-operator directory. Returns None if the
     operator has no entry for that year (e.g. not yet reported)."""
-    year = year or date.today().year
+    year = year or dt_util.now().year
     session = async_get_clientsession(hass)
     query = _OPERATOR_URL_QUERY.format(year=year, operator_id=operator_id)
     headers = {

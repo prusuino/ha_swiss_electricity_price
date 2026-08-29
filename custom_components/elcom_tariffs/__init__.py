@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 
 from .const import CONF_ENERGY_PRODUCT, CONF_GRID_PRODUCT, CONF_MANUAL_HIGH_RP, DOMAIN
-from .coordinator import ElcomManualTariffCoordinator, ElcomTariffCoordinator
+from .coordinator import ElcomManualTariffCoordinator, ElcomTariffCoordinator, manual_issue_id
 
 PLATFORMS = ["sensor", "number"]
 
@@ -41,6 +42,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    # The tariff-window timer (see coordinator.py) is armed by every
+    # successful refresh, the first one included — so its cancel hook is
+    # registered before that first refresh runs.
+    entry.async_on_unload(coordinator.async_cancel_switch_timer)
 
     # Every platform is forwarded once, and only after the first refresh has
     # succeeded. Forwarding any platform earlier looks tempting — the
@@ -77,4 +82,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
+        # The "working tariff file found" repair issue belongs to the
+        # running link check of a manual entry. A reload raises it again
+        # right after setup if it still applies; an entry on its way out
+        # must not leave it behind.
+        ir.async_delete_issue(hass, DOMAIN, manual_issue_id(entry))
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Entry deleted: withdraw the repair issue that told the user to remove it."""
+    ir.async_delete_issue(hass, DOMAIN, manual_issue_id(entry))

@@ -33,11 +33,11 @@
       }
     },
     "abort": {
+      "already_configured": "Ce gestionnaire de réseau est déjà configuré avec la même commune et les mêmes produits tarifaires (ou possède déjà une entrée manuelle).",
       "cannot_connect": "L'annuaire des opérateurs ElCom n'a pas pu être récupéré.",
-      "no_data": "Aucune donnée tarifaire trouvée pour cet opérateur."
+      "no_data": "L'annuaire des opérateurs ElCom ne contient aucun opérateur pour l'année en cours."
     },
     "error": {
-      "cannot_connect": "L'annuaire des opérateurs ElCom n'a pas pu être récupéré.",
       "no_matches": "Aucun opérateur ne correspond à cette recherche. Modifiez le texte de recherche ci-dessus et validez à nouveau.",
       "manual_url_needs_operator": "Une URL manuelle a été saisie mais aucun opérateur n'a été sélectionné. Veuillez aussi sélectionner l'opérateur auquel appartient cette URL.",
       "invalid_time": "Veuillez saisir les heures au format HH:MM (p. ex. 06:00)."

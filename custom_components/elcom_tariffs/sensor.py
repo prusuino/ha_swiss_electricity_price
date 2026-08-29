@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -25,8 +25,8 @@ from .const import (
     DEFAULT_VAT_PERCENT,
     DOMAIN,
 )
-from .coordinator import ElcomTariffCoordinator
-from .device import device_info
+from .coordinator import ElcomTariffCoordinator, current_rate
+from .device import device_info, entity_id_prefix
 from .localization import t, tariff_level_text
 
 _YEAR_RE = re.compile(r"(20\d{2})")
@@ -36,42 +36,69 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator: ElcomTariffCoordinator = hass.data[DOMAIN][entry.entry_id]
-    slug = slugify(entry.data.get("operator_name", entry.entry_id))
+    prefix = entity_id_prefix(entry)
 
     if CONF_MANUAL_HIGH_RP in entry.data:
-        async_add_entities(_manual_entities(hass, coordinator, entry, slug))
+        async_add_entities(_manual_entities(hass, coordinator, entry, prefix))
         return
 
-    data = coordinator.data or {}
     entities: list[SensorEntity] = [
-        ElcomDiagnosticHostSensor(hass, coordinator, entry, slug),
-        ElcomDiagnosticPathSensor(hass, coordinator, entry, slug),
-        ElcomDiagnosticFilenameSensor(hass, coordinator, entry, slug),
-        ElcomDiagnosticYearSensor(hass, coordinator, entry, slug),
-        ElcomDiagnosticLastCheckedSensor(hass, coordinator, entry, slug),
+        ElcomDiagnosticHostSensor(hass, coordinator, entry, prefix),
+        ElcomDiagnosticPathSensor(hass, coordinator, entry, prefix),
+        ElcomDiagnosticFilenameSensor(hass, coordinator, entry, prefix),
+        ElcomDiagnosticYearSensor(hass, coordinator, entry, prefix),
+        ElcomDiagnosticLastCheckedSensor(hass, coordinator, entry, prefix),
     ]
-    for category in ("energy", "grid"):
-        for name, d in data.get(category, {}).items():
-            entities.append(ElcomTariffSensor(hass, coordinator, entry, category, name, slug))
-            if d.get("high_rp_kwh") is not None:
-                entities.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "high_rp_kwh", slug))
-                entities.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "low_rp_kwh", slug))
-    for name in data.get("metering", {}):
-        entities.append(ElcomMeteringSensor(hass, coordinator, entry, name, slug))
-    for name in data.get("municipalities", {}):
-        entities.append(ElcomMunicipalityLevySensor(hass, coordinator, entry, name, slug))
-
     if entry.data.get(CONF_MUNICIPALITY) and entry.data.get(CONF_ENERGY_PRODUCT) and entry.data.get(CONF_GRID_PRODUCT):
-        entities.append(ElcomTariffStatusSensor(hass, coordinator, entry, slug))
-        entities.append(ElcomPriceCurrentSensor(hass, coordinator, entry, slug))
-        entities.append(ElcomPriceLevelSensor(hass, coordinator, entry, "high", slug))
-        entities.append(ElcomPriceLevelSensor(hass, coordinator, entry, "low", slug))
-
+        entities.append(ElcomTariffStatusSensor(hass, coordinator, entry, prefix))
+        entities.append(ElcomPriceCurrentSensor(hass, coordinator, entry, prefix))
+        entities.append(ElcomPriceLevelSensor(hass, coordinator, entry, "high", prefix))
+        entities.append(ElcomPriceLevelSensor(hass, coordinator, entry, "low", prefix))
     async_add_entities(entities)
+
+    # Product, metering-fee and municipality entities follow the operator's
+    # file: whatever the latest fetch contains and hasn't been created yet
+    # is added (a product that first appears in next year's file shows up
+    # without a reload). Entities whose key later disappears from the file
+    # are kept and report unavailable (see the `available` properties)
+    # rather than being removed from the registry — one published file
+    # missing a product is no proof it is gone for good, and removing the
+    # entity would throw away the user's renames, areas and customizations.
+    known: set[tuple] = set()
+
+    @callback
+    def _async_add_dynamic_entities() -> None:
+        data = coordinator.data or {}
+        new: list[SensorEntity] = []
+        for category in ("energy", "grid"):
+            for name, d in data.get(category, {}).items():
+                if (category, name) not in known:
+                    known.add((category, name))
+                    new.append(ElcomTariffSensor(hass, coordinator, entry, category, name, prefix))
+                if d.get("high_rp_kwh") is not None and (category, name, "levels") not in known:
+                    known.add((category, name, "levels"))
+                    new.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "high_rp_kwh", prefix))
+                    new.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "low_rp_kwh", prefix))
+        for name in data.get("metering", {}):
+            if ("metering", name) not in known:
+                known.add(("metering", name))
+                new.append(ElcomMeteringSensor(hass, coordinator, entry, name, prefix))
+        for name in data.get("municipalities", {}):
+            if ("municipality", name) not in known:
+                known.add(("municipality", name))
+                new.append(ElcomMunicipalityLevySensor(hass, coordinator, entry, name, prefix))
+        if new:
+            async_add_entities(new)
+
+    _async_add_dynamic_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_dynamic_entities))
 
 
 class ElcomTariffSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
-    """Currently active rate (CHF/kWh) for an energy or grid tariff product."""
+    """Currently active rate (CHF/kWh) for an energy or grid tariff product.
+    The active window is resolved against the clock on every read (and the
+    coordinator rewrites the state at every window boundary), not frozen at
+    fetch time."""
 
     _attr_has_entity_name = False
     _attr_native_unit_of_measurement = "CHF/kWh"
@@ -80,7 +107,7 @@ class ElcomTariffSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity)
 
     def __init__(
         self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
-        category: str, name: str, slug: str,
+        category: str, name: str, prefix: str,
     ) -> None:
         super().__init__(coordinator)
         self._hass_ref = hass
@@ -89,14 +116,19 @@ class ElcomTariffSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity)
         self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_{category}_{slugify(name)}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_{slugify(name)}"
+        self.entity_id = f"sensor.{prefix}_{category}_{slugify(name)}"
 
     def _data(self) -> dict:
         return (self.coordinator.data or {}).get(self._category, {}).get(self._name_key, {})
 
     @property
+    def available(self) -> bool:
+        # Unavailable, not "unknown", once the product has vanished from the operator's file.
+        return super().available and bool(self._data())
+
+    @property
     def native_value(self):
-        rp = self._data().get("current_rp_kwh")
+        rp, _ = current_rate(self._data(), dt_util.now())
         return round(rp / 100, 5) if rp is not None else None
 
     @property
@@ -104,8 +136,9 @@ class ElcomTariffSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity)
         d = self._data()
         if not d:
             return {}
+        _, level = current_rate(d, dt_util.now())
         return {
-            "current_level": tariff_level_text(d.get("current_level"), self._hass_ref),
+            "current_level": tariff_level_text(level, self._hass_ref),
             "base_price_chf_month": d.get("base_price_chf_month"),
             "customer_type": d.get("customer_type"),
             "valid_from": d.get("valid_from"),
@@ -125,7 +158,7 @@ class ElcomTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEn
 
     def __init__(
         self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
-        category: str, name: str, level_key: str, slug: str,
+        category: str, name: str, level_key: str, prefix: str,
     ) -> None:
         super().__init__(coordinator)
         self._category = category
@@ -136,10 +169,14 @@ class ElcomTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEn
         self._attr_name = f"{name} ({level_label})"
         self._attr_unique_id = f"{entry.entry_id}_{category}_{slugify(name)}_{suffix}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_{slugify(name)}_{suffix}"
+        self.entity_id = f"sensor.{prefix}_{category}_{slugify(name)}_{suffix}"
 
     def _data(self) -> dict:
         return (self.coordinator.data or {}).get(self._category, {}).get(self._name_key, {})
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._data())
 
     @property
     def native_value(self):
@@ -181,10 +218,11 @@ def _diagnostic_path(data: dict) -> str | None:
 
 
 def _diagnostic_tariff_year(data: dict) -> str | None:
-    """The tariff data's own validity year (from its startDate) — NOT a date
-    that might be embedded in the file name. Operators commonly publish next
-    year's tariffs months in advance, so a file dated e.g. August 2025 can
-    (and often does) contain tariffs valid from 2026, not 2025."""
+    """The tariff data's own validity year (from its startDate), falling
+    back to a year found in the file name only when the data carries no
+    startDate. Operators commonly publish next year's tariffs months in
+    advance, so a file dated e.g. August 2025 can (and often does) contain
+    tariffs valid from 2026, not 2025 — which is why startDate wins."""
     valid_from = data.get("tariff_valid_from")
     match = _YEAR_RE.search(valid_from) if valid_from else None
     if match:
@@ -206,13 +244,13 @@ class _ElcomDiagnosticSensorBase(CoordinatorEntity[ElcomTariffCoordinator], Sens
 
     def __init__(
         self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
-        slug: str, name_key: str, id_suffix: str,
+        prefix: str, name_key: str, id_suffix: str,
     ) -> None:
         super().__init__(coordinator)
         self._attr_name = t(name_key, hass)
         self._attr_unique_id = f"{entry.entry_id}_diagnostics_{id_suffix}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_diagnostics_{id_suffix}"
+        self.entity_id = f"sensor.{prefix}_diagnostics_{id_suffix}"
 
 
 class ElcomDiagnosticHostSensor(_ElcomDiagnosticSensorBase):
@@ -225,8 +263,8 @@ class ElcomDiagnosticHostSensor(_ElcomDiagnosticSensorBase):
 
     _attr_icon = "mdi:web"
 
-    def __init__(self, hass, coordinator, entry, slug):
-        super().__init__(hass, coordinator, entry, slug, "diagnostics_host_name", "host")
+    def __init__(self, hass, coordinator, entry, prefix):
+        super().__init__(hass, coordinator, entry, prefix, "diagnostics_host_name", "host")
 
     @property
     def native_value(self):
@@ -247,8 +285,8 @@ class ElcomDiagnosticPathSensor(_ElcomDiagnosticSensorBase):
 
     _attr_icon = "mdi:folder-outline"
 
-    def __init__(self, hass, coordinator, entry, slug):
-        super().__init__(hass, coordinator, entry, slug, "diagnostics_path_name", "path")
+    def __init__(self, hass, coordinator, entry, prefix):
+        super().__init__(hass, coordinator, entry, prefix, "diagnostics_path_name", "path")
 
     @property
     def native_value(self):
@@ -260,8 +298,8 @@ class ElcomDiagnosticFilenameSensor(_ElcomDiagnosticSensorBase):
 
     _attr_icon = "mdi:file-outline"
 
-    def __init__(self, hass, coordinator, entry, slug):
-        super().__init__(hass, coordinator, entry, slug, "diagnostics_filename_name", "filename")
+    def __init__(self, hass, coordinator, entry, prefix):
+        super().__init__(hass, coordinator, entry, prefix, "diagnostics_filename_name", "filename")
 
     @property
     def native_value(self):
@@ -277,8 +315,8 @@ class ElcomDiagnosticYearSensor(_ElcomDiagnosticSensorBase):
 
     _attr_icon = "mdi:calendar-outline"
 
-    def __init__(self, hass, coordinator, entry, slug):
-        super().__init__(hass, coordinator, entry, slug, "diagnostics_year_name", "year")
+    def __init__(self, hass, coordinator, entry, prefix):
+        super().__init__(hass, coordinator, entry, prefix, "diagnostics_year_name", "year")
 
     @property
     def native_value(self):
@@ -297,8 +335,8 @@ class ElcomDiagnosticLastCheckedSensor(_ElcomDiagnosticSensorBase):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-check-outline"
 
-    def __init__(self, hass, coordinator, entry, slug):
-        super().__init__(hass, coordinator, entry, slug, "diagnostics_last_checked_name", "last_checked")
+    def __init__(self, hass, coordinator, entry, prefix):
+        super().__init__(hass, coordinator, entry, prefix, "diagnostics_last_checked_name", "last_checked")
 
     @property
     def native_value(self):
@@ -307,13 +345,14 @@ class ElcomDiagnosticLastCheckedSensor(_ElcomDiagnosticSensorBase):
 
 
 class ElcomTariffStatusSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
-    """Shows whether the configured customer tariff is currently on high or low tariff."""
+    """Shows whether the configured customer tariff is currently on high or
+    low tariff — resolved against the clock on every read."""
 
     _attr_has_entity_name = False
     _attr_icon = "mdi:clock-time-eight-outline"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._entry = entry
@@ -321,15 +360,20 @@ class ElcomTariffStatusSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         self._attr_name = t("tariff_status_sensor_name", hass)
         self._attr_unique_id = f"{entry.entry_id}_tariff_status"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_tariff_level"
+        self.entity_id = f"sensor.{prefix}_tariff_level"
 
     def _energy(self) -> dict:
         data = self.coordinator.data or {}
         return data.get("energy", {}).get(self._entry.data[CONF_ENERGY_PRODUCT], {})
 
     @property
+    def available(self) -> bool:
+        return super().available and bool(self._energy())
+
+    @property
     def native_value(self):
-        return tariff_level_text(self._energy().get("current_level"), self._hass_ref)
+        _, level = current_rate(self._energy(), dt_util.now())
+        return tariff_level_text(level, self._hass_ref)
 
     @property
     def extra_state_attributes(self):
@@ -346,21 +390,25 @@ class ElcomMeteringSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntit
     """Fixed monthly metering fee."""
 
     _attr_has_entity_name = False
-    _attr_native_unit_of_measurement = "CHF/M"
+    _attr_native_unit_of_measurement = "CHF/month"
     _attr_icon = "mdi:meter-electric"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, name: str, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, name: str, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._name_key = name
         self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_metering_{slugify(name)}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_{slugify(name)}"
+        self.entity_id = f"sensor.{prefix}_metering_{slugify(name)}"
 
     def _data(self) -> dict:
         return (self.coordinator.data or {}).get("metering", {}).get(self._name_key, {})
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._data())
 
     @property
     def native_value(self):
@@ -387,17 +435,21 @@ class ElcomMunicipalityLevySensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
     _attr_icon = "mdi:town-hall"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, name: str, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, name: str, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._name_key = name
         self._attr_name = f"{t('municipality_levy_prefix', hass)} {name}"
         self._attr_unique_id = f"{entry.entry_id}_municipality_{slugify(name)}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_municipality_levy_{slugify(name)}"
+        self.entity_id = f"sensor.{prefix}_municipality_levy_{slugify(name)}"
 
     def _data(self) -> dict:
         return (self.coordinator.data or {}).get("municipalities", {}).get(self._name_key, {})
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._data())
 
     @property
     def native_value(self):
@@ -428,7 +480,8 @@ def _calculation_components(coordinator: ElcomTariffCoordinator, entry: ConfigEn
 
 class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
     """Combined current electricity price for the configured municipality +
-    customer tariff, including national levies and VAT."""
+    customer tariff, including national levies and VAT. The energy and grid
+    rates are the ones active right now (resolved on every read)."""
 
     _attr_has_entity_name = False
     _attr_native_unit_of_measurement = "CHF/kWh"
@@ -436,7 +489,7 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
     _attr_icon = "mdi:cash-multiple"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._entry = entry
@@ -444,7 +497,7 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         self._attr_name = t("current_price_name", hass)
         self._attr_unique_id = f"{entry.entry_id}_price_current"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_price_current"
+        self.entity_id = f"sensor.{prefix}_price_current"
 
     def _national_levies_rp(self) -> float:
         return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
@@ -456,13 +509,19 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         return _calculation_components(self.coordinator, self._entry)
 
     @property
+    def available(self) -> bool:
+        # The configured product or municipality vanished from the file: unavailable, not a stale price.
+        return super().available and self._components() is not None
+
+    @property
     def native_value(self):
         c = self._components()
         if not c:
             return None
+        now = dt_util.now()
         total_rp = (
-            (c["energy"]["current_rp_kwh"] or 0)
-            + (c["grid"]["current_rp_kwh"] or 0)
+            (current_rate(c["energy"], now)[0] or 0)
+            + (current_rate(c["grid"], now)[0] or 0)
             + (c["municipality"]["rp_kwh"] or 0)
             + self._national_levies_rp()
         )
@@ -474,8 +533,10 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         c = self._components()
         if not c:
             return {}
-        energy_rp = c["energy"]["current_rp_kwh"] or 0
-        grid_rp = c["grid"]["current_rp_kwh"] or 0
+        now = dt_util.now()
+        energy_rp_now, energy_level = current_rate(c["energy"], now)
+        energy_rp = energy_rp_now or 0
+        grid_rp = current_rate(c["grid"], now)[0] or 0
         municipality_rp = c["municipality"]["rp_kwh"] or 0
         national_rp = self._national_levies_rp()
         vat = self._vat_percent()
@@ -502,7 +563,7 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         )
         return {
             "calculation": calculation,
-            "tariff_level": tariff_level_text(c["energy"]["current_level"], self._hass_ref),
+            "tariff_level": tariff_level_text(energy_level, self._hass_ref),
             "energy_rp_kwh": energy_rp,
             "grid_rp_kwh": grid_rp,
             "municipality_rp_kwh": municipality_rp,
@@ -524,7 +585,7 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
     _attr_icon = "mdi:cash-multiple"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, level: str, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, level: str, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._entry = entry
@@ -534,7 +595,7 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
         self._attr_name = t("price_level_name", hass, level=label)
         self._attr_unique_id = f"{entry.entry_id}_price_{level}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_price_{level}"
+        self.entity_id = f"sensor.{prefix}_price_{level}"
 
     def _national_levies_rp(self) -> float:
         return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
@@ -547,6 +608,10 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
 
     def _key(self) -> str:
         return "high_rp_kwh" if self._level == "high" else "low_rp_kwh"
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._components() is not None
 
     @property
     def native_value(self):
@@ -608,39 +673,41 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
 
 
 def _manual_entities(
-    hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, slug: str
+    hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, prefix: str
 ) -> list[SensorEntity]:
     """Entities for a manually-entered tariff (no operator tariff file could be resolved)."""
     data = coordinator.data or {}
-    entities: list[SensorEntity] = [ElcomManualPriceCurrentSensor(hass, coordinator, entry, slug)]
+    entities: list[SensorEntity] = [ElcomManualPriceCurrentSensor(hass, coordinator, entry, prefix)]
     if data.get("low_rp_kwh") is not None:
-        entities.append(ElcomManualTariffLevelSensor(hass, coordinator, entry, slug))
-        entities.append(ElcomManualPriceLevelSensor(hass, coordinator, entry, "high", slug))
-        entities.append(ElcomManualPriceLevelSensor(hass, coordinator, entry, "low", slug))
+        entities.append(ElcomManualTariffLevelSensor(hass, coordinator, entry, prefix))
+        entities.append(ElcomManualPriceLevelSensor(hass, coordinator, entry, "high", prefix))
+        entities.append(ElcomManualPriceLevelSensor(hass, coordinator, entry, "low", prefix))
     if data.get("grid_fee_chf_month") is not None:
-        entities.append(ElcomManualGridFeeSensor(hass, coordinator, entry, slug))
+        entities.append(ElcomManualGridFeeSensor(hass, coordinator, entry, prefix))
     return entities
 
 
 class ElcomManualTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
-    """Shows whether the manually entered tariff is currently on high or low tariff."""
+    """Shows whether the manually entered tariff is currently on high or low
+    tariff — resolved against the clock on every read."""
 
     _attr_has_entity_name = False
     _attr_icon = "mdi:clock-time-eight-outline"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._hass_ref = hass
         self._attr_name = t("tariff_status_sensor_name", hass)
         self._attr_unique_id = f"{entry.entry_id}_tariff_status"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_tariff_level"
+        self.entity_id = f"sensor.{prefix}_tariff_level"
 
     @property
     def native_value(self):
-        return tariff_level_text((self.coordinator.data or {}).get("current_level"), self._hass_ref)
+        _, level = current_rate(self.coordinator.data or {}, dt_util.now())
+        return tariff_level_text(level, self._hass_ref)
 
     @property
     def extra_state_attributes(self):
@@ -658,7 +725,7 @@ class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], S
     _attr_icon = "mdi:cash-multiple"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._entry = entry
@@ -666,7 +733,7 @@ class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], S
         self._attr_name = t("current_price_name", hass)
         self._attr_unique_id = f"{entry.entry_id}_price_current"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_price_current"
+        self.entity_id = f"sensor.{prefix}_price_current"
 
     def _national_levies_rp(self) -> float:
         return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
@@ -676,7 +743,7 @@ class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], S
 
     @property
     def native_value(self):
-        rp = (self.coordinator.data or {}).get("current_rp_kwh")
+        rp, _ = current_rate(self.coordinator.data or {}, dt_util.now())
         if rp is None:
             return None
         total_rp = (rp + self._national_levies_rp()) * (1 + self._vat_percent() / 100)
@@ -684,8 +751,7 @@ class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], S
 
     @property
     def extra_state_attributes(self):
-        d = self.coordinator.data or {}
-        rp = d.get("current_rp_kwh")
+        rp, level = current_rate(self.coordinator.data or {}, dt_util.now())
         if rp is None:
             return {}
         national_rp = self._national_levies_rp()
@@ -705,7 +771,7 @@ class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], S
         )
         return {
             "calculation": calculation,
-            "tariff_level": tariff_level_text(d.get("current_level"), self._hass_ref),
+            "tariff_level": tariff_level_text(level, self._hass_ref),
             "tariff_rp_kwh": rp,
             "national_levies_rp_kwh": national_rp,
             "vat_percent": vat,
@@ -722,7 +788,7 @@ class ElcomManualPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
     _attr_icon = "mdi:cash-multiple"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, level: str, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, level: str, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._entry = entry
@@ -731,7 +797,7 @@ class ElcomManualPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
         self._attr_name = t("price_level_name", hass, level=label)
         self._attr_unique_id = f"{entry.entry_id}_price_{level}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_price_{level}"
+        self.entity_id = f"sensor.{prefix}_price_{level}"
 
     def _national_levies_rp(self) -> float:
         return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
@@ -753,17 +819,17 @@ class ElcomManualGridFeeSensor(CoordinatorEntity[ElcomTariffCoordinator], Sensor
     """Manually entered monthly grid/metering fee."""
 
     _attr_has_entity_name = False
-    _attr_native_unit_of_measurement = "CHF/M"
+    _attr_native_unit_of_measurement = "CHF/month"
     _attr_icon = "mdi:meter-electric"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, slug: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, prefix: str
     ) -> None:
         super().__init__(coordinator)
         self._attr_name = t("grid_fee_name", hass)
         self._attr_unique_id = f"{entry.entry_id}_grid_fee"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.elcom_{slug}_grundgebuehr"
+        self.entity_id = f"sensor.{prefix}_base_fee"
 
     @property
     def native_value(self):
