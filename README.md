@@ -41,6 +41,8 @@ Entity names, device info, tariff-level labels, and the calculation text adapt a
 
 ## Installation
 
+Requires Home Assistant **2024.12.0** or newer.
+
 ### HACS (recommended)
 
 1. In HACS, go to **Integrations → ⋮ → Custom repositories**, add this repository URL with category **Integration**.

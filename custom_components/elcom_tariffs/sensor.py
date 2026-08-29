@@ -71,7 +71,7 @@ async def async_setup_entry(
 
 
 class ElcomTariffSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
-    """Currently active Rp rate for an energy or grid tariff product."""
+    """Currently active rate (CHF/kWh) for an energy or grid tariff product."""
 
     _attr_has_entity_name = False
     _attr_native_unit_of_measurement = "CHF/kWh"
@@ -379,7 +379,7 @@ class ElcomMeteringSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntit
 
 
 class ElcomMunicipalityLevySensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
-    """Municipality levy (CHF/kWh) for a single municipality served by the operator."""
+    """Municipality levy (Rp/kWh) for a single municipality served by the operator."""
 
     _attr_has_entity_name = False
     _attr_native_unit_of_measurement = "Rp/kWh"

@@ -149,66 +149,81 @@ class ElcomTariffCoordinator(DataUpdateCoordinator[dict]):
         except Exception as err:
             raise UpdateFailed(f"Operator tariff data unreachable: {err}") from err
 
-        now = dt_util.now()
-        energy_tariffs: dict[str, dict] = {}
-        grid_tariffs: dict[str, dict] = {}
-        metering_tariffs: dict[str, dict] = {}
-        municipalities: dict[str, dict] = {}
+        # The whole parse runs inside the try: an operator publishing a
+        # slightly non-conformant tariff file (a record missing a price,
+        # a window without from/to, "tariffs" not being a list) would
+        # otherwise raise straight out of the update and show up as a
+        # generic "Unexpected error fetching ..." traceback instead of the
+        # clean unavailable state the README promises. UpdateFailed itself
+        # is none of these types, so the deliberate "no energy tariffs"
+        # raise below passes through unwrapped.
+        try:
+            now = dt_util.now()
+            energy_tariffs: dict[str, dict] = {}
+            grid_tariffs: dict[str, dict] = {}
+            metering_tariffs: dict[str, dict] = {}
+            municipalities: dict[str, dict] = {}
 
-        for t in raw.get("tariffs", []):
-            ttype = t.get("tariffType")
-            name = t.get("tariffName", "")
-            if ttype == "electricity":
-                energy_tariffs[name] = self._parse_time_tariff(t, now)
-            elif ttype == "grid":
-                grid_tariffs[name] = self._parse_time_tariff(t, now)
-            elif ttype == "metering":
-                base = t.get("prices", {}).get("base", {})
-                metering_tariffs[name] = {
-                    "price_chf": base.get("price"),
-                    "unit": base.get("priceUnit"),
-                    "customer_type": t.get("customerType"),
-                    "valid_from": t.get("startDate"),
-                    "valid_to": t.get("endDate"),
-                }
-            elif ttype == "regional_fees":
-                for m in t.get("prices", {}).get("municipalityTaxes", []):
-                    mname = m.get("municipalityName")
-                    if not mname:
-                        continue
-                    energy = m.get("municipalityEnergy", [])
-                    base = m.get("municipalityBase", {})
-                    municipalities[mname] = {
-                        "rp_kwh": round(energy[0]["price"] * 100, 3) if energy else 0.0,
-                        "base_price_chf": base.get("price", 0),
+            for t in raw.get("tariffs", []):
+                ttype = t.get("tariffType")
+                name = t.get("tariffName", "")
+                if ttype == "electricity":
+                    energy_tariffs[name] = self._parse_time_tariff(t, now)
+                elif ttype == "grid":
+                    grid_tariffs[name] = self._parse_time_tariff(t, now)
+                elif ttype == "metering":
+                    base = t.get("prices", {}).get("base", {})
+                    metering_tariffs[name] = {
+                        "price_chf": base.get("price"),
+                        "unit": base.get("priceUnit"),
+                        "customer_type": t.get("customerType"),
                         "valid_from": t.get("startDate"),
                         "valid_to": t.get("endDate"),
                     }
+                elif ttype == "regional_fees":
+                    for m in t.get("prices", {}).get("municipalityTaxes", []):
+                        mname = m.get("municipalityName")
+                        if not mname:
+                            continue
+                        energy = m.get("municipalityEnergy", [])
+                        base = m.get("municipalityBase", {})
+                        municipalities[mname] = {
+                            "rp_kwh": round(energy[0]["price"] * 100, 3) if energy else 0.0,
+                            "base_price_chf": base.get("price", 0),
+                            "valid_from": t.get("startDate"),
+                            "valid_to": t.get("endDate"),
+                        }
 
-        if not energy_tariffs:
-            raise UpdateFailed("No energy tariffs found in the operator's tariff data")
+            if not energy_tariffs:
+                raise UpdateFailed("No energy tariffs found in the operator's tariff data")
 
-        # The tariff file's own validity period (startDate/endDate of its
-        # electricity tariffs), NOT to be confused with any date embedded in
-        # the file's name — operators commonly publish next year's tariffs
-        # months in advance, so a file named e.g. "20250807_..." can (and
-        # for eug does) contain tariffs valid from 2026-01-01, not 2025.
-        first_electricity = next(
-            (t for t in raw.get("tariffs", []) if t.get("tariffType") == "electricity"), None
-        )
+            # The tariff file's own validity period (startDate/endDate of its
+            # electricity tariffs), NOT to be confused with any date embedded in
+            # the file's name — operators commonly publish next year's tariffs
+            # months in advance, so a file named e.g. "20250807_..." can (and
+            # for eug does) contain tariffs valid from 2026-01-01, not 2025.
+            first_electricity = next(
+                (t for t in raw.get("tariffs", []) if t.get("tariffType") == "electricity"), None
+            )
 
-        return {
-            "dso_name": raw.get("dsoName"),
-            "registered_url": registered_url,
-            "tariff_url": json_url,
-            "last_checked": now.isoformat(),
-            "tariff_valid_from": first_electricity.get("startDate") if first_electricity else None,
-            "tariff_valid_to": first_electricity.get("endDate") if first_electricity else None,
-            "energy": energy_tariffs,
-            "grid": grid_tariffs,
-            "metering": metering_tariffs,
-            "municipalities": municipalities,
-        }
+            return {
+                "dso_name": raw.get("dsoName"),
+                "registered_url": registered_url,
+                "tariff_url": json_url,
+                "last_checked": now.isoformat(),
+                "tariff_valid_from": first_electricity.get("startDate") if first_electricity else None,
+                "tariff_valid_to": first_electricity.get("endDate") if first_electricity else None,
+                "energy": energy_tariffs,
+                "grid": grid_tariffs,
+                "metering": metering_tariffs,
+                "municipalities": municipalities,
+            }
+        # ValueError covers time windows whose from/to are not HH:MM strings
+        # (int() in _time_in_window raises it).
+        except (KeyError, AttributeError, TypeError, IndexError, ValueError) as err:
+            raise UpdateFailed(
+                f"Operator tariff data is malformed ({type(err).__name__}: {err})"
+            ) from err
 
     @staticmethod
     def _parse_time_tariff(t: dict, now) -> dict:

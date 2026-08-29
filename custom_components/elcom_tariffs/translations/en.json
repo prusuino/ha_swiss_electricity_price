@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Swiss Electricity Price (ElCom)",
+        "description": "Search for your grid operator by name (e.g. part of the company or municipality name) and press submit — {count} shown below. To refine, change the search text and submit again. Operators marked \"direct link\" have a machine-readable tariff file that was just verified reachable; operators marked \"auto-detect\" either only report a general web page, or their reported file could not be verified, and their tariff data may not be found automatically. If your operator's link still doesn't work, select the operator and paste the actual tariff file URL under \"Manual tariff file URL\" (find it on the operator's own website — it's a JSON file, look for \"tarif\"/\"tariff\" in the page or its links). If neither works, you'll be offered to enter your rates by hand on the next screen — no need to fill in a URL if you don't have one.",
+        "data": {
+          "operator_search": "Operator name",
+          "operator_id": "Grid operator",
+          "manual_url": "Manual tariff file URL (optional)"
+        }
+      },
+      "location": {
+        "title": "{operator}",
+        "description": "Choose your municipality, and your energy and grid tariff product, exactly as published by {operator}. Pick both separately (rather than one combined \"tariff\") since operators do not always name or categorize their energy and grid products the same way.",
+        "data": {
+          "municipality": "Municipality",
+          "energy_product": "Energy tariff product",
+          "grid_product": "Grid tariff product"
+        }
+      },
+      "manual": {
+        "title": "{operator}",
+        "description": "No usable tariff file could be found for {operator} — neither the registered link nor a URL you supplied worked (or it worked but had no usable data). Enter your known rates by hand instead; find them on your electricity bill or the operator's rate sheet.",
+        "data": {
+          "manual_high_rp": "High-tariff price (Rp/kWh)",
+          "manual_low_rp": "Low-tariff price (Rp/kWh, optional — leave empty for a flat rate)",
+          "manual_high_from": "High tariff starts at (HH:MM)",
+          "manual_high_to": "High tariff ends at (HH:MM)",
+          "manual_high_weekdays": "High tariff applies on",
+          "manual_grid_fee_chf": "Monthly base/grid fee (CHF/month, optional)"
+        }
+      }
+    },
+    "abort": {
+      "cannot_connect": "The ElCom operator directory could not be retrieved.",
+      "no_data": "No tariff data found for this operator."
+    },
+    "error": {
+      "cannot_connect": "The ElCom operator directory could not be retrieved.",
+      "no_matches": "No operator matches that search. Change the search text above and submit again.",
+      "manual_url_needs_operator": "A manual URL was entered but no operator was selected. Please also select the operator this URL belongs to.",
+      "invalid_time": "Please enter times in HH:MM format (e.g. 06:00)."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Electricity Price Settings",
+        "data": {
+          "national_levies_rp": "National electricity levies (Rp/kWh)",
+          "vat_percent": "VAT rate (%)"
+        }
+      }
+    }
+  },
+  "issues": {
+    "manual_link_available": {
+      "title": "A working tariff file was found for {operator}",
+      "description": "This entry was set up with manually entered rates because no usable tariff file could be found for {operator} at the time. A working machine-readable tariff file is now available. To switch from manual entry to full automatic tariffs (with municipality and metering-fee sensors), remove this integration entry and set it up again — the operator's link should now resolve on the first try."
+    }
+  }
+}

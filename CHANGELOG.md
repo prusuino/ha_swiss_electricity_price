@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1 — 2026-08-29
+
+- Fixed: an entry could end up permanently broken when the operator's tariff-file host was unreachable at startup. 1.3.0 set the number entities up before the first data fetch; when that fetch failed, Home Assistant retried the entry without unloading the platform it had already set up, and the retry aborted with "config entry has already been set up!". That turns a temporary network problem into a terminal setup error, which stops retrying altogether and needs a manual reload. All platforms are now set up once, after the first fetch has succeeded. The number entities may briefly show "unavailable" during such an outage — the trade-off 1.3.0 tried to avoid, but the entry now recovers on its own.
+- Fixed: a malformed tariff file from an operator (a price or time window missing a field, an unexpected structure) raised an unhandled error and was reported as an unexpected failure. Such files are now reported like any other data problem, leaving the entities unavailable until the operator publishes a usable file again.
+- Added an English translation file. Without it, English — the default language — fell back to raw translation keys throughout setup, the options dialog and repair notifications.
+- The minimum supported Home Assistant version is now declared correctly as 2024.12.0. The options dialog (national levies / VAT) has always required it, and entry migration required 2024.3.0, but hacs.json still claimed 2024.1.0.
+- Corrected the municipality levy sensor's description, which named the wrong unit.
+
 ## 1.3.0 — 2026-07-17
 
 - Setup now asks for your energy tariff product and grid tariff product separately, picked directly from the operator's own product names, instead of inferring the grid product from a single "customer tariff" selection. The previous naming-convention guess (energy product name + " Netz") does not reliably hold across operators — verified against real operator data, where the two products carry the same customer category but neither the same name nor a matching category label. Existing entries are migrated automatically, reproducing the same guess they already relied on, so already-working setups keep working unchanged.

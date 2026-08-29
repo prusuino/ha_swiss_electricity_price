@@ -42,18 +42,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    # The national-levies/VAT number entities are plain config-entry-option
-    # values with no dependency on the coordinator's data at all, so set
-    # them up before the (network-dependent, possibly slow or briefly
-    # unreachable right after a HA restart) first refresh below — otherwise
-    # a transient startup hiccup on the operator's tariff-file host leaves
-    # them stuck showing "unavailable" until the whole entry setup retries,
-    # even though they never needed the network in the first place.
-    await hass.config_entries.async_forward_entry_setups(entry, ["number"])
-
+    # Every platform is forwarded once, and only after the first refresh has
+    # succeeded. Forwarding any platform earlier looks tempting — the
+    # national-levies/VAT number entities are plain config-entry-option
+    # values that never touch the network, so they could in principle come
+    # up while the operator's tariff-file host is briefly unreachable — but
+    # it breaks recovery: when the first refresh raises ConfigEntryNotReady,
+    # Home Assistant retries the entry without unloading the platforms it
+    # already forwarded, so the retry forwards "number" a second time and
+    # EntityComponent raises "config entry has already been set up!". That
+    # error surfaces as SETUP_ERROR, which is terminal — the entry then
+    # stops retrying altogether and only a manual reload brings it back.
+    # A short "unavailable" window on two option entities is the far
+    # smaller price.
     await coordinator.async_config_entry_first_refresh()
 
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
