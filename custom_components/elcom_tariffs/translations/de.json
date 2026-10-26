@@ -12,11 +12,12 @@
       },
       "location": {
         "title": "{operator}",
-        "description": "Wähle deine Gemeinde sowie dein Energie- und Netz-Tarifprodukt, genau wie von {operator} veröffentlicht. Beide werden separat gewählt (statt ein kombinierter \"Tarif\"), da Betreiber ihre Energie- und Netz-Produkte nicht immer gleich benennen oder einordnen.",
+        "description": "Wähle deine Gemeinde sowie dein Energie- und Netz-Tarifprodukt, genau wie von {operator} veröffentlicht. Beide werden separat gewählt (statt ein kombinierter \"Tarif\"), da Betreiber ihre Energie- und Netz-Produkte nicht immer gleich benennen oder einordnen. Lass „Netztarif enthält die Bundesabgaben bereits“ angehakt, wenn der Netzpreis des Betreibers Netzzuschlag (Art. 35 EnG), Systemdienstleistungen, Stromreserve und Solidaritätszuschlag schon enthält – so sieht es das offizielle Tarifformat vor, und z. B. BKW publiziert so. Manche Betreiber publizieren den Netzpreis ohne diese Abgaben und weisen sie auf der Rechnung separat aus: dann Häkchen entfernen, es werden 3.03 Rp/kWh dazugerechnet. Vergleiche den Preis mit einer Rechnung; der Betrag bleibt danach einstellbar.",
         "data": {
           "municipality": "Gemeinde",
           "energy_product": "Energie-Tarifprodukt",
-          "grid_product": "Netz-Tarifprodukt"
+          "grid_product": "Netz-Tarifprodukt",
+          "grid_includes_levies": "Netztarif enthält die Bundesabgaben bereits"
         }
       },
       "manual": {

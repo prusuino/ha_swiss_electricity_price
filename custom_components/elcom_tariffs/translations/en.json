@@ -12,11 +12,12 @@
       },
       "location": {
         "title": "{operator}",
-        "description": "Choose your municipality, and your energy and grid tariff product, exactly as published by {operator}. Pick both separately (rather than one combined \"tariff\") since operators do not always name or categorize their energy and grid products the same way.",
+        "description": "Choose your municipality, and your energy and grid tariff product, exactly as published by {operator}. Pick both separately (rather than one combined \"tariff\") since operators do not always name or categorize their energy and grid products the same way. Leave \"Grid tariff already includes the federal levies\" ticked if the operator's grid price already contains the federal grid surcharge (Art. 35 EnG), system services, electricity reserve and solidarity surcharge — this is what the official tariff format prescribes and what e.g. BKW publishes. Some operators publish the grid price without them and list the levies separately on the bill: untick it then, and 3.03 Rp/kWh are added. Compare the resulting price with one bill; the amount stays adjustable afterwards.",
         "data": {
           "municipality": "Municipality",
           "energy_product": "Energy tariff product",
-          "grid_product": "Grid tariff product"
+          "grid_product": "Grid tariff product",
+          "grid_includes_levies": "Grid tariff already includes the federal levies"
         }
       },
       "manual": {

@@ -33,6 +33,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ENERGY_PRODUCT,
+    CONF_GRID_INCLUDES_LEVIES,
     CONF_GRID_PRODUCT,
     CONF_MANUAL_GRID_FEE_CHF,
     CONF_MANUAL_HIGH_FROM,
@@ -260,6 +261,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
         grid_products = _list_products(self._raw, "grid")
 
         if user_input is not None:
+            grid_includes_levies = bool(user_input.get(CONF_GRID_INCLUDES_LEVIES, True))
             await self.async_set_unique_id(
                 f"{self._selected['id']}_{user_input[CONF_MUNICIPALITY]}_"
                 f"{user_input[CONF_ENERGY_PRODUCT]}_{user_input[CONF_GRID_PRODUCT]}"
@@ -281,9 +283,14 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_MUNICIPALITY: user_input[CONF_MUNICIPALITY],
                     CONF_ENERGY_PRODUCT: user_input[CONF_ENERGY_PRODUCT],
                     CONF_GRID_PRODUCT: user_input[CONF_GRID_PRODUCT],
+                    CONF_GRID_INCLUDES_LEVIES: grid_includes_levies,
                 },
                 options={
-                    CONF_NATIONAL_LEVIES_RP: DEFAULT_NATIONAL_LEVIES_RP,
+                    # The VSE tariff format defines the grid price as including
+                    # the federal levies, so nothing is added on top in that
+                    # case; operators publishing a net grid price get the
+                    # published levy total added. Adjustable later either way.
+                    CONF_NATIONAL_LEVIES_RP: 0.0 if grid_includes_levies else DEFAULT_NATIONAL_LEVIES_RP,
                     CONF_VAT_PERCENT: DEFAULT_VAT_PERCENT,
                 },
             )
@@ -293,6 +300,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_MUNICIPALITY, default=municipalities[0]): vol.In(municipalities),
                 vol.Required(CONF_ENERGY_PRODUCT, default=energy_products[0]): vol.In(energy_products),
                 vol.Required(CONF_GRID_PRODUCT, default=grid_products[0]): vol.In(grid_products),
+                vol.Required(CONF_GRID_INCLUDES_LEVIES, default=True): bool,
             }
         )
         return self.async_show_form(

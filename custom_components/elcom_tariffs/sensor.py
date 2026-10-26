@@ -17,6 +17,7 @@ from homeassistant.util import slugify
 
 from .const import (
     CONF_ENERGY_PRODUCT,
+    CONF_GRID_INCLUDES_LEVIES,
     CONF_GRID_PRODUCT,
     CONF_MANUAL_HIGH_RP,
     CONF_MUNICIPALITY,
@@ -601,6 +602,8 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         return {
             "calculation": calculation,
             "tariff_level": tariff_level_text(energy_level, self._hass_ref),
+            # None for entries created before 1.5.0 (the choice did not exist yet).
+            "grid_includes_national_levies": self._entry.data.get(CONF_GRID_INCLUDES_LEVIES),
             "energy_rp_kwh": energy_rp,
             "grid_rp_kwh": grid_rp,
             "municipality_rp_kwh": municipality_rp,

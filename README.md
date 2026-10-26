@@ -28,7 +28,7 @@ All entities are created dynamically from the selected operator's own live JSON 
 | `sensor.elcom_<operator>_<id>_diagnostics_host` / `_path` / `_filename` | Where the operator's tariff file is currently being fetched from — split into host, directory, and file name so each fits the diagnostics card. The full URL and the ElCom-registered URL are available as attributes on the host sensor. |
 | `sensor.elcom_<operator>_<id>_diagnostics_year` | The validity year of the tariffs currently in use, read from their `startDate`. Only if the data carries no `startDate` does it fall back to a year found in the file name — operators often publish next year's tariffs months in advance, so the two can disagree. |
 | `sensor.elcom_<operator>_<id>_diagnostics_last_checked` | When the tariff file was last successfully fetched and parsed. |
-| `number.elcom_<operator>_<id>_national_levies` | National electricity levies (Rp/kWh), directly adjustable. Default 3.03. |
+| `number.elcom_<operator>_<id>_national_levies` | National electricity levies (Rp/kWh) added on top of the operator's prices, directly adjustable. Starts at 0 when setup was told the grid tariff already includes them (the default), otherwise at 3.03 — see [National levies](#national-levies-included-in-the-grid-tariff-or-not). |
 | `number.elcom_<operator>_<id>_vat_percent` | VAT rate (%), directly adjustable. Default 8.1. |
 
 A manual-rate entry (see [If no link works at all](#if-no-link-works-at-all)) has no tariff file to break down and gets this smaller set instead:
@@ -79,7 +79,14 @@ The integration is listed in the HACS default store, so no custom repository is 
 3. Search for and choose your **grid operator**. Operators marked "direct link" are far more likely to work; operators marked "auto-detect" may fail. To refine the search, just change the search text and submit again.
 4. If your operator's link still doesn't work, select it anyway and paste the actual tariff file URL into **Manual tariff file URL** — find it on the operator's own website (it's a JSON file, usually linked from a "tariffs" or "Strompreise" page). This is the recommended fix when ElCom's own registry entry for your operator is stale or broken, which happens for a meaningful share of Swiss operators.
 5. Choose your **municipality**, then your **energy tariff product** and **grid tariff product**, populated live from the selected operator's own tariff file — picked separately since operators don't always name or categorize their energy and grid products the same way, so pairing them automatically isn't reliable.
-6. Done — all tariff, municipality, diagnostic, and metering-fee sensors appear immediately. National levies and VAT can be adjusted afterwards via the integration's **Configure** dialog.
+6. Say whether the operator's **grid tariff already includes the federal levies** (ticked by default) — see the next section for how to tell.
+7. Done — all tariff, municipality, diagnostic, and metering-fee sensors appear immediately. National levies and VAT can be adjusted afterwards via the integration's **Configure** dialog.
+
+### National levies: included in the grid tariff or not?
+
+The federal levies — grid surcharge (Art. 35 EnG, 2.30 Rp/kWh in 2026), Swissgrid system services (0.27), electricity reserve (0.41) and the solidarity surcharge (0.05), together 3.03 Rp/kWh — are not an operator's own tariff, but they do end up on every bill. The official machine-readable tariff format (VSE) defines the `grid` price as *including* them, and operators such as BKW publish it that way: a grid price of 11.42 Rp/kWh that already contains the 3.03. Other operators publish the grid price net of the levies and list them as separate lines on the bill — for them, the 3.03 Rp/kWh have to be added to reach the billed price. The two kinds of file look identical, so the integration cannot tell them apart; it asks you instead.
+
+How to tell: take one bill and look at the energy-dependent grid line. If the bill lists the grid surcharge, system services and electricity reserve as separate lines next to it, the grid price in the file is most likely net of them — untick the option (or set the national-levies number to 3.03). If no such lines exist and the grid price on the bill matches the file, keep the option ticked (levies 0). Either way, the `calculation` attribute of the combined price sensor spells out every component, and the amount can be changed at any time in the Configure dialog. Entries created before 1.5.0 keep their 3.03 Rp/kWh; set the number to 0 if your bill says the price is too high by that amount.
 
 ### If no link works at all
 

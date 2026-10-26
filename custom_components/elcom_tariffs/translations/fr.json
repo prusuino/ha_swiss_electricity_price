@@ -12,11 +12,12 @@
       },
       "location": {
         "title": "{operator}",
-        "description": "Choisissez votre commune ainsi que votre produit tarifaire énergie et réseau, tels que publiés par {operator}. Les deux sont choisis séparément (plutôt qu'un \"tarif\" combiné), car les opérateurs ne nomment ni ne classent toujours leurs produits énergie et réseau de la même façon.",
+        "description": "Choisissez votre commune ainsi que votre produit tarifaire énergie et réseau, tels que publiés par {operator}. Les deux sont choisis séparément (plutôt qu'un \"tarif\" combiné), car les opérateurs ne nomment ni ne classent toujours leurs produits énergie et réseau de la même façon. Laissez « Le tarif réseau inclut déjà les redevances fédérales » coché si le prix réseau de l'opérateur contient déjà le supplément réseau (art. 35 LEne), les services-système, la réserve d'électricité et le supplément de solidarité – c'est ce que prévoit le format tarifaire officiel, et BKW par exemple publie ainsi. Certains opérateurs publient le prix réseau sans ces redevances et les facturent séparément : décochez alors la case, 3.03 ct./kWh sont ajoutés. Comparez le prix obtenu avec une facture ; le montant reste modifiable ensuite.",
         "data": {
           "municipality": "Commune",
           "energy_product": "Produit tarifaire énergie",
-          "grid_product": "Produit tarifaire réseau"
+          "grid_product": "Produit tarifaire réseau",
+          "grid_includes_levies": "Le tarif réseau inclut déjà les redevances fédérales"
         }
       },
       "manual": {

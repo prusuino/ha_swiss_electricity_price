@@ -12,11 +12,12 @@
       },
       "location": {
         "title": "{operator}",
-        "description": "Scegli il tuo comune e i tuoi prodotti tariffari energia e rete, esattamente come pubblicati da {operator}. Vengono scelti separatamente (invece di un'unica \"tariffa\" combinata), poiché gli operatori non denominano né classificano sempre allo stesso modo i loro prodotti energia e rete.",
+        "description": "Scegli il tuo comune e i tuoi prodotti tariffari energia e rete, esattamente come pubblicati da {operator}. Vengono scelti separatamente (invece di un'unica \"tariffa\" combinata), poiché gli operatori non denominano né classificano sempre allo stesso modo i loro prodotti energia e rete. Lascia selezionato « La tariffa di rete include già gli oneri federali » se il prezzo di rete dell'operatore contiene già il supplemento di rete (art. 35 LEne), i servizi di sistema, la riserva di energia elettrica e il supplemento di solidarietà – è quanto prevede il formato tariffario ufficiale, e ad es. BKW pubblica così. Alcuni operatori pubblicano il prezzo di rete senza questi oneri e li fatturano separatamente: in tal caso togli il segno di spunta, vengono aggiunti 3.03 ct./kWh. Confronta il prezzo risultante con una fattura; l'importo resta modificabile in seguito.",
         "data": {
           "municipality": "Comune",
           "energy_product": "Prodotto tariffario energia",
-          "grid_product": "Prodotto tariffario rete"
+          "grid_product": "Prodotto tariffario rete",
+          "grid_includes_levies": "La tariffa di rete include già gli oneri federali"
         }
       },
       "manual": {

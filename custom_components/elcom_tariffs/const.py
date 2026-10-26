@@ -24,6 +24,9 @@ CONF_MUNICIPALITY = "municipality"
 CONF_ENERGY_PRODUCT = "energy_product"
 CONF_GRID_PRODUCT = "grid_product"
 CONF_NATIONAL_LEVIES_RP = "national_levies_rp"
+# Setup choice: the operator's grid price already contains the federal levies (as the
+# VSE tariff format prescribes) -> national levies start at 0 instead of the default.
+CONF_GRID_INCLUDES_LEVIES = "grid_includes_levies"
 CONF_VAT_PERCENT = "vat_percent"
 
 # Manual tariff entry (fallback when neither the operator's registered link
@@ -39,8 +42,12 @@ DEFAULT_MANUAL_HIGH_FROM = "06:00"
 DEFAULT_MANUAL_HIGH_TO = "22:00"
 DEFAULT_MANUAL_HIGH_WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr"]
 
-# National electricity levies (grid surcharge Art. 35, system services, strategic
-# reserve, solidarity network costs), in Rp/kWh — not part of any operator's own
-# tariff file, published separately by BFE/Swissgrid.
+# National electricity levies (grid surcharge Art. 35 EnG 2.30, system services
+# 0.27, electricity reserve 0.41, solidarity surcharge 0.05 — 2026 figures), in
+# Rp/kWh. The VSE tariff format defines the "grid" price as *including* these,
+# and operators such as BKW publish it that way; others publish the grid price
+# net of them and list the levies separately on the bill. Which one applies is
+# chosen at setup (CONF_GRID_INCLUDES_LEVIES); this is the amount added when
+# the grid price does NOT include them, adjustable afterwards.
 DEFAULT_NATIONAL_LEVIES_RP = 3.03
 DEFAULT_VAT_PERCENT = 8.1

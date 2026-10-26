@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0 — 2026-10-26
+
+- Setup now asks whether the operator's **grid tariff already includes the federal levies** (grid surcharge Art. 35 EnG, system services, electricity reserve, solidarity surcharge). The official VSE tariff format defines the grid price as including them, and operators such as BKW publish it that way — for those, the previous default of adding 3.03 Rp/kWh counted the levies twice and the combined price came out about 3.3 Rp/kWh above the bill (incl. VAT). Other operators publish the grid price net of the levies and list them separately on the bill; for those the addition is right. The option defaults to *included*, which sets the national levies to 0; unticking it keeps the previous 3.03 Rp/kWh. The amount remains adjustable in the Configure dialog either way. (#3, reported with a bill-level breakdown by @DerAutomatiker)
+- The combined price sensor's attributes show the choice (`grid_includes_national_levies`), next to the levy amount that is being added, so a mismatch with the bill is easy to spot.
+- Existing entries are not changed: they keep the levy amount they have. If your bill shows the price too high by the levy amount, set the national-levies number to 0.
+- README: new section on the two cases, with the figures.
+
 ## 1.4.1 — 2026-10-26
 
 - Fixed: a tariff file holding more than one year's tariffs — operators commonly append next year's set to this year's, under the same product names — was parsed as one. Whichever year happened to come last in the file won for each product, municipality and metering fee, and the validity-year diagnostic reported the first set's year (2027 for BKW's file, whose 2027 tariffs precede the 2026 ones). Only the records valid today are used now, in the setup dialog's product and municipality lists as well as for every sensor. When the current period ends (New Year, typically), the file is re-read right then instead of at the next 24-hour fetch. A file with no record valid today falls back to the nearest upcoming set, or failing that the most recent one, with a warning in the log. (#1)
