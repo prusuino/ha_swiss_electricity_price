@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: when a tariff file contains several validity periods for the same product (e.g. BKW publishes 2026 and 2027 side by side), the entry valid today is now used instead of whichever entry happens to come first or last in the file. The diagnostics year is taken from that entry too, and the integration switches to the next year's tariffs on its own at the turn of the year.
+- Fixed: concession fees that only apply to secondary meters ("Zweitzähler") no longer override the regular municipality levy.
+
 ## 1.4.0 — 2026-08-29
 
 - Fixed: the high/low tariff switch was only evaluated at the moment the tariff file was fetched, once every 24 hours. Whatever tariff level applied at that moment stayed on for the rest of the day — the tariff-level sensor, every product sensor and the combined current price could show the high tariff straight through a low-tariff night (and vice versa). The active time window is now resolved against the clock every time a sensor is read, and the sensors are refreshed at the minute a window starts or ends (e.g. 22:00 and 06:00), without any additional network traffic. The 24-hour fetch of the tariff file itself is unchanged.
