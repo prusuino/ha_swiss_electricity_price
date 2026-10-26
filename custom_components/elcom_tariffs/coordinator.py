@@ -55,6 +55,79 @@ WEEKDAY_ABBR = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
 _MINUTES_PER_DAY = 24 * 60
 
 
+def _parse_date(value: str | None):
+    """Date part of an ISO startDate/endDate ("2027-01-01" or
+    "2027-01-01T00:00:00"); None when missing or unparsable."""
+    try:
+        return datetime.strptime(value[:10], "%Y-%m-%d").date() if value else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _select_current_tariffs(tariffs: list[dict], today) -> list[dict]:
+    """Keep, per product, only the tariff entry that is valid today.
+
+    Operators such as BKW publish next year's tariffs next to the current
+    ones in the same file, with identical tariffName. Without this filter
+    the entry that happens to come first/last in the file wins. Per product
+    (type + name + voltage level + municipality/canton) the entry with
+    startDate <= today <= endDate is used; if none is valid today, the
+    most recent one that already started, else the earliest upcoming one.
+    Entries without usable dates are always kept."""
+
+    def key(t: dict) -> tuple:
+        prices = t.get("prices") or {}
+        places = tuple(
+            sorted(
+                str(m.get("municipalityNumber") or m.get("municipalityName"))
+                for m in prices.get("municipalityTaxes", []) or []
+            )
+            + sorted(str(c.get("cantonName")) for c in prices.get("cantonalTaxes", []) or [])
+        )
+        return (t.get("tariffType"), t.get("tariffName"), t.get("customerVoltageLevel"), places)
+
+    groups: dict[tuple, list[dict]] = {}
+    for t in tariffs:
+        groups.setdefault(key(t), []).append(t)
+
+    chosen: set[int] = set()
+    for group in groups.values():
+        dated = [(t, _parse_date(t.get("startDate")), _parse_date(t.get("endDate"))) for t in group]
+        if all(start is None for _, start, _ in dated):
+            chosen.update(id(t) for t in group)
+            continue
+        valid = [
+            t for t, start, end in dated
+            if start is not None and start <= today and (end is None or today <= end)
+        ]
+        if not valid:
+            started = sorted(
+                ((start, t) for t, start, _ in dated if start is not None and start <= today),
+                key=lambda x: x[0],
+            )
+            if started:
+                valid = [started[-1][1]]
+            else:
+                upcoming = sorted(
+                    ((start, t) for t, start, _ in dated if start is not None),
+                    key=lambda x: x[0],
+                )
+                valid = [upcoming[0][1]]
+        # entries without dates in a mixed group are kept as before
+        chosen.update(id(t) for t in valid)
+        chosen.update(id(t) for t, start, _ in dated if start is None)
+    return [t for t in tariffs if id(t) in chosen]
+
+
+def _is_secondary_meter_fee(t: dict) -> bool:
+    """True for concession fees that only apply to secondary meters
+    ("Zweitzähler" / "compteurs secondaires"). BKW lists them next to the
+    regular concession fee for the same municipality; they must not
+    override it."""
+    text = f"{t.get('tariffName', '')} {t.get('comment', '')}".lower()
+    return "zweitzähler" in text or "compteurs secondaires" in text
+
+
 def manual_issue_id(entry: ConfigEntry) -> str:
     """Repair-issue id raised for a manual entry once the operator's own
     tariff file starts working (see ElcomManualTariffCoordinator)."""
@@ -264,8 +337,13 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             grid_tariffs: dict[str, dict] = {}
             metering_tariffs: dict[str, dict] = {}
             municipalities: dict[str, dict] = {}
+            secondary_municipalities: dict[str, dict] = {}
 
-            for t in raw.get("tariffs", []):
+            current_tariffs = _select_current_tariffs(
+                raw.get("tariffs", []), dt_util.now().date()
+            )
+
+            for t in current_tariffs:
                 ttype = t.get("tariffType")
                 name = t.get("tariffName", "")
                 if ttype == "electricity":
@@ -288,12 +366,22 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                             continue
                         energy = m.get("municipalityEnergy", [])
                         base = m.get("municipalityBase", {})
-                        municipalities[mname] = {
+                        target = (
+                            secondary_municipalities
+                            if _is_secondary_meter_fee(t)
+                            else municipalities
+                        )
+                        target[mname] = {
                             "rp_kwh": round(energy[0]["price"] * 100, 3) if energy else 0.0,
                             "base_price_chf": base.get("price", 0),
                             "valid_from": t.get("startDate"),
                             "valid_to": t.get("endDate"),
                         }
+
+            # Secondary-meter fees are only used for municipalities that have
+            # no regular concession fee at all.
+            for mname, levy in secondary_municipalities.items():
+                municipalities.setdefault(mname, levy)
 
             if not energy_tariffs:
                 raise UpdateFailed("No energy tariffs found in the operator's tariff data")
@@ -304,7 +392,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             # months in advance, so a file named e.g. "20250807_..." can (and
             # for eug does) contain tariffs valid from 2026-01-01, not 2025.
             first_electricity = next(
-                (t for t in raw.get("tariffs", []) if t.get("tariffType") == "electricity"), None
+                (t for t in current_tariffs if t.get("tariffType") == "electricity"), None
             )
 
             return {
