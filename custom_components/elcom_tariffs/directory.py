@@ -190,12 +190,19 @@ async def async_fetch_operator_url(
     return bindings[0]["url"]["value"] if bindings else None
 
 
+def _looks_like_json(body: bytes) -> bool:
+    """True if a response body starts like a JSON document (ignoring a
+    UTF-8 BOM and leading whitespace)."""
+    return body.lstrip(b"\xef\xbb\xbf \t\r\n")[:1] in (b"{", b"[")
+
+
 async def async_resolve_tariff_url(hass: HomeAssistant, registered_url: str) -> str:
     """Resolve an operator's registered URL to an actual machine-readable
     tariff JSON URL.
 
     If the registered URL already points directly at a .json file, it is
-    used as-is. Otherwise, the page it points to is fetched and scanned for
+    used as-is. Otherwise the URL is fetched: if it redirects to / serves a
+    JSON document, the final URL is used; if it is a page, it is scanned for
     a link to a .json file (the same auto-discovery approach used by
     operators like eug that publish a "tariffs" page rather than a stable
     direct link). Raises ValueError if no JSON file can be found either way.
@@ -208,6 +215,14 @@ async def async_resolve_tariff_url(hass: HomeAssistant, registered_url: str) -> 
     session = async_get_clientsession(hass)
     async with session.get(url, timeout=25) as resp:
         resp.raise_for_status()
+        body = await resp.read()
+        # Some operators register a page address that does not end in .json
+        # but redirects straight to the tariff file (or serves it itself,
+        # e.g. BKW's http://www.bkw.ch/de/tarife-json). aiohttp follows the
+        # redirect, so if what came back is already JSON, use the final URL
+        # instead of looking for a link in it.
+        if _looks_like_json(body):
+            return str(resp.url)
         html = await resp.text()
 
     match = re.search(r'href="([^"]+\.json)"', html)
