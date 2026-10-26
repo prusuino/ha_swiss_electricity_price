@@ -4,6 +4,7 @@
 
 - Fixed: when a tariff file contains several validity periods for the same product (e.g. BKW publishes 2026 and 2027 side by side), the entry valid today is now used instead of whichever entry happens to come first or last in the file. The diagnostics year is taken from that entry too, and the integration switches to the next year's tariffs on its own at the turn of the year.
 - Fixed: concession fees that only apply to secondary meters ("Zweitzähler") no longer override the regular municipality levy.
+- Fixed: a registered tariff-file address that redirects to (or directly serves) the JSON file, without ending in `.json`, is now used as-is instead of being scanned for a link. Fixes operators such as BKW, whose ElCom registration for 2026 is a page address that redirects to the file.
 
 ## 1.4.0 — 2026-08-29
 
