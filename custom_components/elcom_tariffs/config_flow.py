@@ -29,6 +29,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ENERGY_PRODUCT,
@@ -56,10 +57,12 @@ from .const import (
 from .coordinator import WEEKDAY_ABBR, async_fetch_raw_tariffs
 from .directory import (
     async_fetch_operator_directory,
+    async_fetch_operator_url,
     async_resolve_tariff_url,
     async_verify_direct_links,
 )
 from .localization import t
+from .tariff_period import select_current_tariffs
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -79,6 +82,13 @@ def _time_str(value: str) -> str:
     return value
 
 
+def _current_tariffs(raw: dict) -> list[dict]:
+    """The file's records valid today — operators often ship this year's
+    and next year's tariffs in one file under the same product names, and
+    the picker must list exactly what the coordinator will later parse."""
+    return select_current_tariffs(raw.get("tariffs", []), dt_util.now().date())[0]
+
+
 def _list_products(raw: dict, tariff_type: str) -> list[str]:
     """Tariff product names (tariffName, verbatim) of the given type
     (electricity or grid) — used to let the user pick their own energy and
@@ -89,7 +99,7 @@ def _list_products(raw: dict, tariff_type: str) -> list[str]:
     between an operator's own energy and grid product, and two different
     energy products can share one customerType)."""
     names: list[str] = []
-    for tariff in raw.get("tariffs", []):
+    for tariff in _current_tariffs(raw):
         if tariff.get("tariffType") != tariff_type:
             continue
         name = tariff.get("tariffName", "")
@@ -100,7 +110,7 @@ def _list_products(raw: dict, tariff_type: str) -> list[str]:
 
 def _list_municipalities(raw: dict) -> list[str]:
     names: set[str] = set()
-    for tariff in raw.get("tariffs", []):
+    for tariff in _current_tariffs(raw):
         if tariff.get("tariffType") != "regional_fees":
             continue
         for m in tariff.get("prices", {}).get("municipalityTaxes", []):
@@ -173,8 +183,23 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                 elif operator is not None:
                     url_to_use = manual_url or operator["url"]
                     try:
-                        resolved_url = await async_resolve_tariff_url(self.hass, url_to_use)
-                        self._raw = await async_fetch_raw_tariffs(self.hass, resolved_url)
+                        try:
+                            resolved_url = await async_resolve_tariff_url(self.hass, url_to_use)
+                            self._raw = await async_fetch_raw_tariffs(self.hass, resolved_url)
+                        except Exception:
+                            if manual_url:
+                                raise
+                            # The registration for this year is unusable;
+                            # from autumn on the operator may already have
+                            # registered next year's (often newer) link.
+                            next_year_url = await async_fetch_operator_url(
+                                self.hass, operator["id"], dt_util.now().year + 1
+                            )
+                            if not next_year_url or next_year_url == url_to_use:
+                                raise
+                            resolved_url = await async_resolve_tariff_url(self.hass, next_year_url)
+                            self._raw = await async_fetch_raw_tariffs(self.hass, resolved_url)
+                            url_to_use = next_year_url
                     except Exception as err:  # noqa: BLE001 - any failure leads to the manual fallback
                         # Neither the operator's registered link nor a supplied
                         # manual URL worked — offer manual rate entry instead

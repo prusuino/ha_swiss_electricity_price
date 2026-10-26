@@ -2,6 +2,7 @@
 products + municipality levies + combined price, for the selected grid operator."""
 from __future__ import annotations
 
+import hashlib
 import re
 from urllib.parse import urlsplit
 
@@ -30,6 +31,33 @@ from .device import device_info, entity_id_prefix
 from .localization import t, tariff_level_text
 
 _YEAR_RE = re.compile(r"(20\d{2})")
+
+
+class _SlugBook:
+    """Hands out one id slug per (category, name) and keeps it for the life
+    of the entry. slugify() drops characters like "<", "=" and ">", so two
+    products that differ only in them — BKW's "Benutzungsdauer <= 3500h/a"
+    and "... > 3500h/a" — would collapse into one unique_id and the second
+    entity would be refused by Home Assistant. The first name to claim a
+    slug keeps it plain (so ids created by earlier versions stay as they
+    are); a later name landing on a taken slug gets a short hash of its
+    full name appended. Names arriving in one batch are claimed in sorted
+    order, so the outcome does not depend on the order within the file."""
+
+    def __init__(self) -> None:
+        self._slugs: dict[tuple[str, str], str] = {}
+        self._taken: set[tuple[str, str]] = set()
+
+    def claim(self, category: str, names: list[str]) -> None:
+        for name in sorted(n for n in names if (category, n) not in self._slugs):
+            slug = slugify(name)
+            if (category, slug) in self._taken:
+                slug = f"{slug}_{hashlib.sha1(name.encode('utf-8')).hexdigest()[:6]}"
+            self._taken.add((category, slug))
+            self._slugs[(category, name)] = slug
+
+    def get(self, category: str, name: str) -> str:
+        return self._slugs[(category, name)]
 
 
 async def async_setup_entry(
@@ -65,28 +93,35 @@ async def async_setup_entry(
     # missing a product is no proof it is gone for good, and removing the
     # entity would throw away the user's renames, areas and customizations.
     known: set[tuple] = set()
+    slugs = _SlugBook()
 
     @callback
     def _async_add_dynamic_entities() -> None:
         data = coordinator.data or {}
         new: list[SensorEntity] = []
         for category in ("energy", "grid"):
+            slugs.claim(category, list(data.get(category, {})))
             for name, d in data.get(category, {}).items():
+                slug = slugs.get(category, name)
                 if (category, name) not in known:
                     known.add((category, name))
-                    new.append(ElcomTariffSensor(hass, coordinator, entry, category, name, prefix))
+                    new.append(ElcomTariffSensor(hass, coordinator, entry, category, name, prefix, slug))
                 if d.get("high_rp_kwh") is not None and (category, name, "levels") not in known:
                     known.add((category, name, "levels"))
-                    new.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "high_rp_kwh", prefix))
-                    new.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "low_rp_kwh", prefix))
+                    new.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "high_rp_kwh", prefix, slug))
+                    new.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "low_rp_kwh", prefix, slug))
+        slugs.claim("metering", list(data.get("metering", {})))
         for name in data.get("metering", {}):
             if ("metering", name) not in known:
                 known.add(("metering", name))
-                new.append(ElcomMeteringSensor(hass, coordinator, entry, name, prefix))
+                new.append(ElcomMeteringSensor(hass, coordinator, entry, name, prefix, slugs.get("metering", name)))
+        slugs.claim("municipality", list(data.get("municipalities", {})))
         for name in data.get("municipalities", {}):
             if ("municipality", name) not in known:
                 known.add(("municipality", name))
-                new.append(ElcomMunicipalityLevySensor(hass, coordinator, entry, name, prefix))
+                new.append(
+                    ElcomMunicipalityLevySensor(hass, coordinator, entry, name, prefix, slugs.get("municipality", name))
+                )
         if new:
             async_add_entities(new)
 
@@ -107,16 +142,16 @@ class ElcomTariffSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity)
 
     def __init__(
         self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
-        category: str, name: str, prefix: str,
+        category: str, name: str, prefix: str, slug: str,
     ) -> None:
         super().__init__(coordinator)
         self._hass_ref = hass
         self._category = category
         self._name_key = name
         self._attr_name = name
-        self._attr_unique_id = f"{entry.entry_id}_{category}_{slugify(name)}"
+        self._attr_unique_id = f"{entry.entry_id}_{category}_{slug}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.{prefix}_{category}_{slugify(name)}"
+        self.entity_id = f"sensor.{prefix}_{category}_{slug}"
 
     def _data(self) -> dict:
         return (self.coordinator.data or {}).get(self._category, {}).get(self._name_key, {})
@@ -158,7 +193,7 @@ class ElcomTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEn
 
     def __init__(
         self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
-        category: str, name: str, level_key: str, prefix: str,
+        category: str, name: str, level_key: str, prefix: str, slug: str,
     ) -> None:
         super().__init__(coordinator)
         self._category = category
@@ -167,9 +202,9 @@ class ElcomTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEn
         suffix = "high" if level_key == "high_rp_kwh" else "low"
         level_label = t("tariff_level_high", hass) if suffix == "high" else t("tariff_level_low", hass)
         self._attr_name = f"{name} ({level_label})"
-        self._attr_unique_id = f"{entry.entry_id}_{category}_{slugify(name)}_{suffix}"
+        self._attr_unique_id = f"{entry.entry_id}_{category}_{slug}_{suffix}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.{prefix}_{category}_{slugify(name)}_{suffix}"
+        self.entity_id = f"sensor.{prefix}_{category}_{slug}_{suffix}"
 
     def _data(self) -> dict:
         return (self.coordinator.data or {}).get(self._category, {}).get(self._name_key, {})
@@ -394,14 +429,15 @@ class ElcomMeteringSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntit
     _attr_icon = "mdi:meter-electric"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, name: str, prefix: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
+        name: str, prefix: str, slug: str,
     ) -> None:
         super().__init__(coordinator)
         self._name_key = name
         self._attr_name = name
-        self._attr_unique_id = f"{entry.entry_id}_metering_{slugify(name)}"
+        self._attr_unique_id = f"{entry.entry_id}_metering_{slug}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.{prefix}_metering_{slugify(name)}"
+        self.entity_id = f"sensor.{prefix}_metering_{slug}"
 
     def _data(self) -> dict:
         return (self.coordinator.data or {}).get("metering", {}).get(self._name_key, {})
@@ -435,14 +471,15 @@ class ElcomMunicipalityLevySensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
     _attr_icon = "mdi:town-hall"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, name: str, prefix: str
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
+        name: str, prefix: str, slug: str,
     ) -> None:
         super().__init__(coordinator)
         self._name_key = name
         self._attr_name = f"{t('municipality_levy_prefix', hass)} {name}"
-        self._attr_unique_id = f"{entry.entry_id}_municipality_{slugify(name)}"
+        self._attr_unique_id = f"{entry.entry_id}_municipality_{slug}"
         self._attr_device_info = device_info(hass, entry)
-        self.entity_id = f"sensor.{prefix}_municipality_levy_{slugify(name)}"
+        self.entity_id = f"sensor.{prefix}_municipality_levy_{slug}"
 
     def _data(self) -> dict:
         return (self.coordinator.data or {}).get("municipalities", {}).get(self._name_key, {})

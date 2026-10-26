@@ -61,6 +61,12 @@ def _with_scheme(url: str) -> str:
     return url if url.startswith("http") else "https://" + url
 
 
+def _looks_like_json(body: bytes) -> bool:
+    """Sniff the start of a response body (UTF-8 BOM and whitespace
+    tolerated) for a JSON object or array."""
+    return body.lstrip(b"\xef\xbb\xbf \t\r\n")[:1] in (b"{", b"[")
+
+
 async def _verify_reachable(session, url: str) -> bool:
     """Live-check whether a URL that looks like a direct JSON link actually
     serves JSON. A URL merely ending in .json is not enough — ElCom's
@@ -80,8 +86,7 @@ async def _verify_reachable(session, url: str) -> bool:
     except Exception as err:  # noqa: BLE001 - any failure simply means "not a usable direct link"
         _LOGGER.debug("Registered link %s not reachable: %s", url, err)
         return False
-    text = chunk.lstrip()
-    return text[:1] in (b"{", b"[")
+    return _looks_like_json(chunk)
 
 
 async def async_verify_direct_links(hass: HomeAssistant, operators: list[dict]) -> None:
@@ -195,10 +200,13 @@ async def async_resolve_tariff_url(hass: HomeAssistant, registered_url: str) -> 
     tariff JSON URL.
 
     If the registered URL already points directly at a .json file, it is
-    used as-is. Otherwise, the page it points to is fetched and scanned for
-    a link to a .json file (the same auto-discovery approach used by
-    operators like eug that publish a "tariffs" page rather than a stable
-    direct link). Raises ValueError if no JSON file can be found either way.
+    used as-is. Otherwise the URL is fetched: if what comes back is itself
+    the JSON file — some operators register a short address that redirects
+    to the file, e.g. BKW's "/de/tarife-json" — the final URL of that
+    response is used. Otherwise the page is scanned for a link to a .json
+    file (the auto-discovery approach for operators that publish a
+    "tariffs" page rather than a stable direct link). Raises ValueError if
+    no JSON file can be found either way.
     """
     url = _with_scheme(registered_url)
 
@@ -208,8 +216,13 @@ async def async_resolve_tariff_url(hass: HomeAssistant, registered_url: str) -> 
     session = async_get_clientsession(hass)
     async with session.get(url, timeout=25) as resp:
         resp.raise_for_status()
-        html = await resp.text()
+        body = await resp.read()
+        final_url = str(resp.url)
 
+    if _looks_like_json(body):
+        return final_url
+
+    html = body.decode("utf-8", errors="replace")
     match = re.search(r'href="([^"]+\.json)"', html)
     if not match:
         raise ValueError(

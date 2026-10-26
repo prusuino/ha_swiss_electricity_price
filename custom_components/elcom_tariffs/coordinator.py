@@ -13,12 +13,18 @@ coordinator arms a point-in-time timer at the next window boundary (e.g.
 22:00 and 06:00) that pushes the already-fetched data to every entity
 again, so a high/low switch shows up at the minute it happens rather than
 at the next 24 h fetch.
+
+Validity periods: operators commonly keep more than one year's tariffs in
+one file (next year's appended to this year's). Only the records valid
+today are parsed, see tariff_period.py; when that validity period ends
+(New Year, typically) the file is re-read right away instead of at the
+next 24 h fetch.
 """
 from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -46,6 +52,7 @@ from .const import (
     UPDATE_INTERVAL_HOURS,
 )
 from .directory import async_fetch_operator_url, async_resolve_tariff_url
+from .tariff_period import is_secondary_meter_fee, select_current_tariffs, tariff_validity_end
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -162,6 +169,11 @@ class _ElcomBaseCoordinator(DataUpdateCoordinator[dict]):
         """The parsed products whose windows decide when the timer fires."""
         raise NotImplementedError
 
+    def _data_expired(self, data: dict) -> bool:
+        """True when the fetched data no longer applies and has to be
+        re-fetched instead of merely re-pushed to the entities."""
+        return False
+
     async def _async_update_data(self) -> dict:
         data = await self._async_fetch_data()
         self._async_arm_switch_timer(data)
@@ -178,6 +190,13 @@ class _ElcomBaseCoordinator(DataUpdateCoordinator[dict]):
         """A window boundary was reached: rewrite every entity's state from
         the already-fetched data (no network), then arm the next one."""
         self._unsub_switch_timer = None
+        if self.data is not None and self._data_expired(self.data):
+            # The tariff period ended at this midnight: the records parsed
+            # for it are stale now (next year's set is likely already in
+            # the file). Re-fetch and re-select; the refresh re-arms the
+            # timer when it completes.
+            self.hass.async_create_task(self.async_request_refresh())
+            return
         self.async_update_listeners()
         if self.data is not None:
             self._async_arm_switch_timer(self.data)
@@ -199,6 +218,43 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
 
     def _switch_products(self, data: dict) -> list[dict]:
         return [*data.get("energy", {}).values(), *data.get("grid", {}).values()]
+
+    def _data_expired(self, data: dict) -> bool:
+        period_end = data.get("tariff_period_end")
+        return bool(period_end) and dt_util.now().date() > date.fromisoformat(period_end)
+
+    async def _async_fetch_from_registration(self, registered_url: str) -> tuple[str, dict]:
+        """Resolve a registered URL and fetch the file behind it. If that
+        fails, fall back once to the URL the operator registered for NEXT
+        year (if any, and if different): from autumn on, many operators
+        have already reported next year's link — often the only one that
+        still works once they have moved this year's file — and that file
+        typically carries the current year's tariffs as well. The fallback
+        is used for this fetch only; the stored registration is left alone
+        and re-checked on the next cycle as usual."""
+        try:
+            json_url = await async_resolve_tariff_url(self.hass, registered_url)
+            return json_url, await async_fetch_raw_tariffs(self.hass, json_url)
+        except Exception as err:  # noqa: BLE001 - try next year's registration before giving up
+            if self.config_entry.data.get(CONF_URL_IS_MANUAL):
+                raise
+            try:
+                next_year_url = await async_fetch_operator_url(
+                    self.hass, self.config_entry.data[CONF_OPERATOR_ID], dt_util.now().year + 1
+                )
+            except Exception as directory_err:  # noqa: BLE001 - the directory is down: report the original problem
+                _LOGGER.debug("Next-year registration lookup failed: %s", directory_err)
+                raise err from None
+            if not next_year_url or next_year_url == registered_url:
+                raise
+            _LOGGER.debug(
+                "Registered URL %s not usable (%s), trying next year's registration %s",
+                registered_url,
+                err,
+                next_year_url,
+            )
+            json_url = await async_resolve_tariff_url(self.hass, next_year_url)
+            return json_url, await async_fetch_raw_tariffs(self.hass, json_url)
 
     async def _async_refresh_registered_url(self) -> None:
         """Re-check ElCom's registry for this operator's current-year
@@ -243,8 +299,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         # without ever failing.
         registered_url = self.config_entry.data[CONF_TARIFF_URL]
         try:
-            json_url = await async_resolve_tariff_url(self.hass, registered_url)
-            raw = await async_fetch_raw_tariffs(self.hass, json_url)
+            json_url, raw = await self._async_fetch_from_registration(registered_url)
         except Exception as err:
             # aiohttp's ClientResponseError carries the HTTP status in its
             # text, so a 403 (bot protection) reads differently from a
@@ -264,8 +319,23 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             grid_tariffs: dict[str, dict] = {}
             metering_tariffs: dict[str, dict] = {}
             municipalities: dict[str, dict] = {}
+            secondary_meter_municipalities: dict[str, dict] = {}
 
-            for t in raw.get("tariffs", []):
+            # Only the records valid today. Files holding this year's and
+            # next year's tariffs under the same product names would
+            # otherwise be merged by name, with the year that happens to
+            # come last in the file winning per product.
+            today = dt_util.now().date()
+            tariffs, selection = select_current_tariffs(raw.get("tariffs", []), today)
+            if selection in ("upcoming", "expired"):
+                _LOGGER.warning(
+                    "%s: no tariffs valid on %s in the operator's file, showing the %s ones instead",
+                    self.config_entry.title,
+                    today.isoformat(),
+                    "next" if selection == "upcoming" else "most recent",
+                )
+
+            for t in tariffs:
                 ttype = t.get("tariffType")
                 name = t.get("tariffName", "")
                 if ttype == "electricity":
@@ -288,12 +358,22 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                             continue
                         energy = m.get("municipalityEnergy", [])
                         base = m.get("municipalityBase", {})
-                        municipalities[mname] = {
+                        # A levy that applies to secondary meters only is
+                        # kept apart so it cannot replace the regular one.
+                        target = (
+                            secondary_meter_municipalities if is_secondary_meter_fee(t) else municipalities
+                        )
+                        target[mname] = {
                             "rp_kwh": round(energy[0]["price"] * 100, 3) if energy else 0.0,
                             "base_price_chf": base.get("price", 0),
                             "valid_from": t.get("startDate"),
                             "valid_to": t.get("endDate"),
                         }
+
+            # A municipality that has nothing but a secondary-meter levy
+            # still gets that one rather than none.
+            for mname, levy in secondary_meter_municipalities.items():
+                municipalities.setdefault(mname, levy)
 
             if not energy_tariffs:
                 raise UpdateFailed("No energy tariffs found in the operator's tariff data")
@@ -303,9 +383,8 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             # the file's name — operators commonly publish next year's tariffs
             # months in advance, so a file named e.g. "20250807_..." can (and
             # for eug does) contain tariffs valid from 2026-01-01, not 2025.
-            first_electricity = next(
-                (t for t in raw.get("tariffs", []) if t.get("tariffType") == "electricity"), None
-            )
+            first_electricity = next((t for t in tariffs if t.get("tariffType") == "electricity"), None)
+            period_end = tariff_validity_end(tariffs)
 
             return {
                 "dso_name": raw.get("dsoName"),
@@ -314,6 +393,8 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                 "last_checked": dt_util.now().isoformat(),
                 "tariff_valid_from": first_electricity.get("startDate") if first_electricity else None,
                 "tariff_valid_to": first_electricity.get("endDate") if first_electricity else None,
+                "tariff_period_end": period_end.isoformat() if period_end else None,
+                "tariff_selection": selection,
                 "energy": energy_tariffs,
                 "grid": grid_tariffs,
                 "metering": metering_tariffs,
@@ -401,7 +482,8 @@ class ElcomManualTariffCoordinator(_ElcomBaseCoordinator):
             if registered_url:
                 resolved_url = await async_resolve_tariff_url(self.hass, registered_url)
                 raw = await async_fetch_raw_tariffs(self.hass, resolved_url)
-                usable = any(t.get("tariffType") == "electricity" for t in raw.get("tariffs", []))
+                tariffs, _selection = select_current_tariffs(raw.get("tariffs", []), dt_util.now().date())
+                usable = any(t.get("tariffType") == "electricity" for t in tariffs)
         except Exception as err:  # noqa: BLE001 - "still no working link" is the expected outcome here
             _LOGGER.debug("Operator link still not usable for manual entry %s: %s", entry.title, err)
             usable = False
