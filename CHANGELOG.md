@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1 — 2026-10-29
+
+- Municipality levy sensors of the municipalities you did not choose are now created **disabled**. An operator such as BKW serves hundreds of municipalities, and all of their levy sensors used to start enabled; only the chosen one does now. The others stay available — enable any of them in its entity settings. An entry set up without a municipality keeps all of them enabled. (#5, reported by @Skylolerr)
+- Existing entities are not changed: Home Assistant applies the disabled default only when an entity is first created. To clean up an existing entry, disable the unneeded sensors by hand or remove and re-add the entry.
+
 ## 1.5.0 — 2026-10-26
 
 - Setup now asks whether the operator's **grid tariff already includes the federal levies** (grid surcharge Art. 35 EnG, system services, electricity reserve, solidarity surcharge). The official VSE tariff format defines the grid price as including them, and operators such as BKW publish it that way — for those, the previous default of adding 3.03 Rp/kWh counted the levies twice and the combined price came out about 3.3 Rp/kWh above the bill (incl. VAT). Other operators publish the grid price net of the levies and list them separately on the bill; for those the addition is right. The option defaults to *included*, which sets the national levies to 0; unticking it keeps the previous 3.03 Rp/kWh. The amount remains adjustable in the Configure dialog either way. (#3, reported with a bill-level breakdown by @DerAutomatiker)

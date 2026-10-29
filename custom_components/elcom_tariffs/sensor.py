@@ -478,6 +478,10 @@ class ElcomMunicipalityLevySensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
         super().__init__(coordinator)
         self._name_key = name
         self._attr_name = f"{t('municipality_levy_prefix', hass)} {name}"
+        # An operator can serve hundreds of municipalities; only the one the
+        # entry was set up for starts enabled (all of them without a choice).
+        selected = entry.data.get(CONF_MUNICIPALITY)
+        self._attr_entity_registry_enabled_default = not selected or name == selected
         self._attr_unique_id = f"{entry.entry_id}_municipality_{slug}"
         self._attr_device_info = device_info(hass, entry)
         self.entity_id = f"sensor.{prefix}_municipality_levy_{slug}"
