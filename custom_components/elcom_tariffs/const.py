@@ -7,6 +7,20 @@ LINDAS_SPARQL_URL = "https://cached.lindas.admin.ch/query"
 
 UPDATE_INTERVAL_HOURS = 24
 
+# Sent with every request to an operator's own host (tariff file, link
+# verification, auto-detection page). Home Assistant's shared session
+# identifies itself as "HomeAssistant/<version> aiohttp/<version>
+# Python/<version>", and at least one operator's web server (Technische
+# Betriebe Flawil, nginx) answers any user agent containing "aiohttp"
+# with HTTP 406 Not Acceptable, so the registered tariff file could not
+# be fetched although it is valid and publicly reachable (#7). The
+# LINDAS directory queries keep the default user agent.
+USER_AGENT = (
+    "SwissElectricityPrice/1.5.2 "
+    "(Home Assistant integration; +https://github.com/prusuino/ha_swiss_electricity_price)"
+)
+OPERATOR_REQUEST_HEADERS = {"User-Agent": USER_AGENT, "Accept": "application/json, */*;q=0.8"}
+
 CONF_OPERATOR_ID = "operator_id"
 CONF_OPERATOR_NAME = "operator_name"
 CONF_TARIFF_URL = "tariff_url"

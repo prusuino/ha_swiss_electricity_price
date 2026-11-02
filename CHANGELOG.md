@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.2 — 2026-11-02
+
+- Fixed: an operator whose web server rejects Home Assistant's default user agent could not be set up and showed no values, although its registered tariff file is valid and publicly reachable. Technische Betriebe Flawil (TBF) answers every request whose user agent contains `aiohttp` with HTTP 406 Not Acceptable; Home Assistant's shared HTTP session identifies itself as `HomeAssistant/<version> aiohttp/<version> Python/<version>`. Requests to an operator's host (tariff file, link verification, auto-detection page) now carry the integration's own user agent, `SwissElectricityPrice/<version> (Home Assistant integration; +repository link)`. The ElCom directory queries are unchanged. (#7, reported by @kunoGit)
+- Nothing to do after updating. An entry that fell back to manual rates because of this can be removed and set up again, or kept — the daily check will report that the operator's file now works.
+
 ## 1.5.1 — 2026-10-29
 
 - Municipality levy sensors of the municipalities you did not choose are now created **disabled**. An operator such as BKW serves hundreds of municipalities, and all of their levy sensors used to start enabled; only the chosen one does now. The others stay available — enable any of them in its entity settings. An entry set up without a municipality keeps all of them enabled. (#5, reported by @Skylolerr)

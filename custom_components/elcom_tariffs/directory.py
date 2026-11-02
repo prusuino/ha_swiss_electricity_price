@@ -9,7 +9,9 @@ data on LINDAS. Data quality varies a lot in practice: some operators report
 a working direct link to the JSON file, others only their general company
 website, and — importantly — some report a URL ending in .json that is
 simply dead (moved, removed, or never valid) since ElCom does not itself
-verify what operators report. A URL merely *looking* like a direct JSON
+verify what operators report. Every request to an operator's host carries
+the integration's own User-Agent (OPERATOR_REQUEST_HEADERS): some hosts
+reject the default one, see const.py. A URL merely *looking* like a direct JSON
 link is therefore not a reliable signal on its own, so direct links are
 live-verified (a GET that sniffs the start of the body) before being
 labeled — see async_verify_direct_links() and resolve_tariff_url() below.
@@ -24,7 +26,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
-from .const import LINDAS_SPARQL_URL
+from .const import LINDAS_SPARQL_URL, OPERATOR_REQUEST_HEADERS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,7 +80,9 @@ async def _verify_reachable(session, url: str) -> bool:
     and sniffs the start of the body for JSON rather than trusting the
     status code alone."""
     try:
-        async with session.get(url, timeout=_VERIFY_TIMEOUT_SECONDS, allow_redirects=True) as resp:
+        async with session.get(
+            url, headers=OPERATOR_REQUEST_HEADERS, timeout=_VERIFY_TIMEOUT_SECONDS, allow_redirects=True
+        ) as resp:
             if resp.status >= 400:
                 _LOGGER.debug("Registered link %s answered HTTP %s", url, resp.status)
                 return False
@@ -214,7 +218,7 @@ async def async_resolve_tariff_url(hass: HomeAssistant, registered_url: str) -> 
         return url
 
     session = async_get_clientsession(hass)
-    async with session.get(url, timeout=25) as resp:
+    async with session.get(url, headers=OPERATOR_REQUEST_HEADERS, timeout=25) as resp:
         resp.raise_for_status()
         body = await resp.read()
         final_url = str(resp.url)

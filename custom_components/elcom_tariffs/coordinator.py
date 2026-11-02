@@ -49,6 +49,7 @@ from .const import (
     DEFAULT_MANUAL_HIGH_TO,
     DEFAULT_MANUAL_HIGH_WEEKDAYS,
     DOMAIN,
+    OPERATOR_REQUEST_HEADERS,
     UPDATE_INTERVAL_HOURS,
 )
 from .directory import async_fetch_operator_url, async_resolve_tariff_url
@@ -143,7 +144,7 @@ def _price_level(all_prices: list[float], price: float) -> str:
 async def async_fetch_raw_tariffs(hass: HomeAssistant, json_url: str) -> dict:
     """Fetch the tariff JSON from an already-resolved direct URL."""
     session = async_get_clientsession(hass)
-    async with session.get(json_url, timeout=25) as resp:
+    async with session.get(json_url, headers=OPERATOR_REQUEST_HEADERS, timeout=25) as resp:
         resp.raise_for_status()
         return await resp.json(content_type=None)
 
