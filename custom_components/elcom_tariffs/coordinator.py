@@ -22,10 +22,12 @@ next 24 h fetch.
 """
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
@@ -35,12 +37,16 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_ENERGY_PRODUCT,
+    CONF_GRID_PRODUCT,
     CONF_MANUAL_GRID_FEE_CHF,
     CONF_MANUAL_HIGH_FROM,
     CONF_MANUAL_HIGH_RP,
     CONF_MANUAL_HIGH_TO,
     CONF_MANUAL_HIGH_WEEKDAYS,
     CONF_MANUAL_LOW_RP,
+    CONF_MUNICIPALITY,
+    CONF_NEXT_PERIOD_NOTIFIED,
     CONF_OPERATOR_ID,
     CONF_OPERATOR_NAME,
     CONF_TARIFF_URL,
@@ -53,7 +59,13 @@ from .const import (
     UPDATE_INTERVAL_HOURS,
 )
 from .directory import async_fetch_operator_url, async_resolve_tariff_url
-from .tariff_period import is_secondary_meter_fee, select_current_tariffs, tariff_validity_end
+from .localization import t
+from .tariff_period import (
+    is_secondary_meter_fee,
+    select_current_tariffs,
+    select_upcoming_tariffs,
+    tariff_validity_end,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,11 +74,93 @@ WEEKDAY_ABBR = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
 
 _MINUTES_PER_DAY = 24 * 60
 
+# The VSE format prescribes English two-letter weekday abbreviations, but
+# a share of operators writes German ones — "So" for Sunday above all,
+# found in 6 of the first 22 files surveyed in 11/2026 — and the file
+# then has no window at all on those days, so the price fell back to the
+# levies alone every Sunday. Spellings per language, canonical index 0..6
+# (Monday..Sunday); "Di" and "Do" are ambiguous (German Tuesday/Thursday,
+# French Sunday / Italian Sunday) and are resolved by the language that
+# recognises most of the product's weekday tokens.
+_WEEKDAY_SPELLINGS: dict[str, dict[str, int]] = {
+    "en": {"mo": 0, "tu": 1, "we": 2, "th": 3, "fr": 4, "sa": 5, "su": 6,
+           "mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6},
+    "de": {"mo": 0, "di": 1, "mi": 2, "do": 3, "fr": 4, "sa": 5, "so": 6},
+    "fr": {"lu": 0, "ma": 1, "me": 2, "je": 3, "ve": 4, "sa": 5, "di": 6},
+    "it": {"lu": 0, "ma": 1, "me": 2, "gi": 3, "ve": 4, "sa": 5, "do": 6},
+}
+_MONTH_SPELLINGS: dict[str, int] = {
+    **{m.lower(): i for i, m in enumerate(MONTH_ABBR)},
+    "mär": 2, "mrz": 2, "mai": 4, "okt": 9, "dez": 11,  # de
+    "fév": 1, "fev": 1, "avr": 3, "juin": 5, "juil": 6, "aoû": 7, "aou": 7, "déc": 11,  # fr
+    "gen": 0, "mag": 4, "giu": 5, "lug": 6, "ago": 7, "set": 8, "ott": 9, "dic": 11,  # it
+}
+
+
+def _weekday_tokens(raw: list | None) -> list[str]:
+    return [str(t).strip().rstrip(".").lower() for t in (raw or []) if str(t).strip()]
+
+
+def weekday_language(windows: list[dict]) -> str:
+    """The spelling that recognises most of the weekday tokens across all
+    of a product's windows — judged over the whole product, since a single
+    window such as ["Sa", "Di"] is ambiguous on its own. Ties go to
+    English, then German (dict order)."""
+    tokens = [t for w in windows for t in _weekday_tokens(w.get("weekdays"))]
+    scores = {lang: sum(1 for t in tokens if t in table) for lang, table in _WEEKDAY_SPELLINGS.items()}
+    return max(_WEEKDAY_SPELLINGS, key=lambda lang: scores[lang])
+
+
+def normalize_weekdays(raw: list | None, language: str = "en") -> list[str] | None:
+    """Weekday tokens as the file spells them -> canonical WEEKDAY_ABBR
+    list, or None when the window applies to every day (empty, "all", or
+    a spelling nobody recognises — a window must not silently vanish).
+    `language` (see weekday_language) decides the ambiguous tokens."""
+    tokens = _weekday_tokens(raw)
+    if not tokens or any(t in ("all", "alle", "tous", "tutti", "*") for t in tokens):
+        return None
+    preferred = language if language in _WEEKDAY_SPELLINGS else "en"
+    days: set[int] = set()
+    for token in tokens:
+        if token in _WEEKDAY_SPELLINGS[preferred]:
+            days.add(_WEEKDAY_SPELLINGS[preferred][token])
+            continue
+        for table in _WEEKDAY_SPELLINGS.values():
+            if token in table:
+                days.add(table[token])
+                break
+        else:
+            _LOGGER.debug("Unknown weekday spelling %r in tariff window; window applies to all days", token)
+            return None
+    return [WEEKDAY_ABBR[i] for i in sorted(days)]
+
+
+def normalize_months(raw: list | None) -> list[str] | None:
+    """Month tokens as the file spells them -> canonical MONTH_ABBR list,
+    or None when the window applies all year (or a spelling is unknown)."""
+    if not raw:
+        return None
+    months: set[int] = set()
+    for token in raw:
+        key = str(token).strip().rstrip(".").lower()
+        index = _MONTH_SPELLINGS.get(key, _MONTH_SPELLINGS.get(key[:3]))
+        if index is None:
+            _LOGGER.debug("Unknown month spelling %r in tariff window; window applies all year", token)
+            return None
+        months.add(index)
+    return [MONTH_ABBR[i] for i in sorted(months)] if len(months) < 12 else None
+
 
 def manual_issue_id(entry: ConfigEntry) -> str:
     """Repair-issue id raised for a manual entry once the operator's own
     tariff file starts working (see ElcomManualTariffCoordinator)."""
     return f"manual_link_available_{entry.entry_id}"
+
+
+def selection_issue_id(entry: ConfigEntry) -> str:
+    """Repair-issue id raised when the chosen product or municipality is
+    no longer in the operator's file (see _async_check_selection)."""
+    return f"selection_missing_{entry.entry_id}"
 
 
 def _parse_hhmm(value: str) -> int:
@@ -97,7 +191,11 @@ def _current_window(windows: list[dict], now: datetime) -> dict | None:
             continue
         if _time_in_window(now_min, w["from_min"], w["to_min"]):
             return w
-    return None
+    # No window covers this moment — the operator's file leaves a gap
+    # (a seasonal set missing a season, a weekday set missing a day).
+    # The product's lowest rate is the least wrong answer: off-peak is
+    # what operators leave implicit, and a price of zero would be worse.
+    return min(windows, key=lambda w: w["rp_kwh"]) if windows else None
 
 
 def current_rate(product: dict, now: datetime) -> tuple[float | None, str | None]:
@@ -146,7 +244,20 @@ async def async_fetch_raw_tariffs(hass: HomeAssistant, json_url: str) -> dict:
     session = async_get_clientsession(hass)
     async with session.get(json_url, headers=OPERATOR_REQUEST_HEADERS, timeout=25) as resp:
         resp.raise_for_status()
-        return await resp.json(content_type=None)
+        body = await resp.read()
+    return decode_tariff_file(body)
+
+
+def decode_tariff_file(body: bytes) -> dict:
+    """Parse an operator's file. The format is JSON, hence UTF-8, but a
+    few operators export it in a Windows code page (two Romandy utilities
+    in the 11/2026 survey), which otherwise fails on the first accent."""
+    try:
+        text = body.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        _LOGGER.warning("Tariff file is not UTF-8, reading it as Windows-1252")
+        text = body.decode("cp1252", errors="replace")
+    return json.loads(text)
 
 
 class _ElcomBaseCoordinator(DataUpdateCoordinator[dict]):
@@ -316,12 +427,6 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         # is none of these types, so the deliberate "no energy tariffs"
         # raise below passes through unwrapped.
         try:
-            energy_tariffs: dict[str, dict] = {}
-            grid_tariffs: dict[str, dict] = {}
-            metering_tariffs: dict[str, dict] = {}
-            municipalities: dict[str, dict] = {}
-            secondary_meter_municipalities: dict[str, dict] = {}
-
             # Only the records valid today. Files holding this year's and
             # next year's tariffs under the same product names would
             # otherwise be merged by name, with the year that happens to
@@ -336,62 +441,37 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                     "next" if selection == "upcoming" else "most recent",
                 )
 
-            for t in tariffs:
-                ttype = t.get("tariffType")
-                name = t.get("tariffName", "")
-                if ttype == "electricity":
-                    energy_tariffs[name] = self._parse_time_tariff(t)
-                elif ttype == "grid":
-                    grid_tariffs[name] = self._parse_time_tariff(t)
-                elif ttype == "metering":
-                    base = t.get("prices", {}).get("base", {})
-                    metering_tariffs[name] = {
-                        "price_chf": base.get("price"),
-                        "unit": base.get("priceUnit"),
-                        "customer_type": t.get("customerType"),
-                        "valid_from": t.get("startDate"),
-                        "valid_to": t.get("endDate"),
-                    }
-                elif ttype == "regional_fees":
-                    for m in t.get("prices", {}).get("municipalityTaxes", []):
-                        mname = m.get("municipalityName")
-                        if not mname:
-                            continue
-                        energy = m.get("municipalityEnergy", [])
-                        base = m.get("municipalityBase", {})
-                        # A levy that applies to secondary meters only is
-                        # kept apart so it cannot replace the regular one.
-                        target = (
-                            secondary_meter_municipalities if is_secondary_meter_fee(t) else municipalities
-                        )
-                        target[mname] = {
-                            "rp_kwh": round(energy[0]["price"] * 100, 3) if energy else 0.0,
-                            "base_price_chf": base.get("price", 0),
-                            "valid_from": t.get("startDate"),
-                            "valid_to": t.get("endDate"),
-                            # Operators put the fine print here — BKW notes a
-                            # yearly cap ("Deckelung in CHF/a: 24") on levies
-                            # it publishes as an implausible per-kWh figure.
-                            "comment": m.get("municipalityComment") or None,
-                        }
-
-            # A municipality that has nothing but a secondary-meter levy
-            # still gets that one rather than none.
-            for mname, levy in secondary_meter_municipalities.items():
-                municipalities.setdefault(mname, levy)
+            parsed = self._parse_tariff_records(tariffs)
+            energy_tariffs = parsed["energy"]
+            grid_tariffs = parsed["grid"]
+            metering_tariffs = parsed["metering"]
+            municipalities = parsed["municipalities"]
 
             if not energy_tariffs:
                 raise UpdateFailed("No energy tariffs found in the operator's tariff data")
+
+            # The nearest set beyond today's (next year's tariffs, published
+            # months ahead): parsed the same way, for the next-period
+            # preview sensor and the one-off notification. Only when
+            # today's set is itself current — if the file holds nothing
+            # valid today, "upcoming" IS what is being shown already.
+            next_period = None
+            if selection == "current":
+                upcoming, upcoming_start = select_upcoming_tariffs(raw.get("tariffs", []), today)
+                if upcoming:
+                    upcoming_parsed = self._parse_tariff_records(upcoming)
+                    if upcoming_parsed["energy"] or upcoming_parsed["grid"]:
+                        next_period = {"valid_from": upcoming_start.isoformat(), **upcoming_parsed}
 
             # The tariff file's own validity period (startDate/endDate of its
             # electricity tariffs), NOT to be confused with any date embedded in
             # the file's name — operators commonly publish next year's tariffs
             # months in advance, so a file named e.g. "20250807_..." can (and
-            # for eug does) contain tariffs valid from 2026-01-01, not 2025.
+            # some do) contain tariffs valid from 2026-01-01, not 2025.
             first_electricity = next((t for t in tariffs if t.get("tariffType") == "electricity"), None)
             period_end = tariff_validity_end(tariffs)
 
-            return {
+            data = {
                 "dso_name": raw.get("dsoName"),
                 "registered_url": registered_url,
                 "tariff_url": json_url,
@@ -404,13 +484,180 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                 "grid": grid_tariffs,
                 "metering": metering_tariffs,
                 "municipalities": municipalities,
+                "next_period": next_period,
             }
+            self._async_check_selection(data)
+            self._async_notify_next_period(data)
+            return data
         # ValueError covers time windows whose from/to are not HH:MM strings
         # (int() in _parse_hhmm raises it).
         except (KeyError, AttributeError, TypeError, IndexError, ValueError) as err:
             raise UpdateFailed(
                 f"Operator tariff data is malformed ({type(err).__name__}: {err})"
             ) from err
+
+    @callback
+    def _async_check_selection(self, data: dict) -> None:
+        """Raise (or withdraw) the repair issue telling the user that the
+        energy/grid product or municipality chosen at setup is no longer in
+        the operator's file — operators rename products or drop the
+        municipality section between years, and the combined-price
+        sensors are unavailable until the current names are chosen in the
+        Configure dialog."""
+        entry = self.config_entry
+        missing: list[str] = []
+        energy = entry.data.get(CONF_ENERGY_PRODUCT)
+        grid = entry.data.get(CONF_GRID_PRODUCT)
+        municipality = entry.data.get(CONF_MUNICIPALITY)
+        if energy and energy not in data["energy"]:
+            missing.append(energy)
+        if grid and grid not in data["grid"]:
+            missing.append(grid)
+        if municipality and data["municipalities"] and municipality not in data["municipalities"]:
+            missing.append(municipality)
+        if not missing:
+            ir.async_delete_issue(self.hass, DOMAIN, selection_issue_id(entry))
+            return
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            selection_issue_id(entry),
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="selection_missing",
+            translation_placeholders={"operator": entry.data[CONF_OPERATOR_NAME], "missing": ", ".join(missing)},
+        )
+
+    @callback
+    def _async_notify_next_period(self, data: dict) -> None:
+        """Once per upcoming tariff period: a persistent notification with
+        the change of the configured energy + grid rates. Remembered in
+        the entry data by the period's start date so it is not repeated at
+        every 24 h refresh, and only when both configured products exist
+        in both sets (nothing to compare otherwise)."""
+        entry = self.config_entry
+        upcoming = data.get("next_period")
+        if not upcoming or entry.data.get(CONF_NEXT_PERIOD_NOTIFIED) == upcoming["valid_from"]:
+            return
+        energy_name = entry.data.get(CONF_ENERGY_PRODUCT)
+        grid_name = entry.data.get(CONF_GRID_PRODUCT)
+        old_e, old_g = data["energy"].get(energy_name), data["grid"].get(grid_name)
+        new_e, new_g = upcoming["energy"].get(energy_name), upcoming["grid"].get(grid_name)
+        if not (old_e and old_g and new_e and new_g):
+            return
+
+        def level(product: dict, key: str) -> float:
+            value = product.get(key)
+            return value if value is not None else product["windows"][0]["rp_kwh"]
+
+        old_high = level(old_e, "high_rp_kwh") + level(old_g, "high_rp_kwh")
+        old_low = level(old_e, "low_rp_kwh") + level(old_g, "low_rp_kwh")
+        new_high = level(new_e, "high_rp_kwh") + level(new_g, "high_rp_kwh")
+        new_low = level(new_e, "low_rp_kwh") + level(new_g, "low_rp_kwh")
+        valid_from = date.fromisoformat(upcoming["valid_from"])
+        persistent_notification.async_create(
+            self.hass,
+            t(
+                "next_period_notification",
+                self.hass,
+                operator=entry.data[CONF_OPERATOR_NAME],
+                date=valid_from.strftime("%d.%m.%Y"),
+                old_high=old_high,
+                new_high=new_high,
+                high_pct=(new_high - old_high) / old_high * 100 if old_high else 0.0,
+                old_low=old_low,
+                new_low=new_low,
+                low_pct=(new_low - old_low) / old_low * 100 if old_low else 0.0,
+                energy_product=energy_name,
+                grid_product=grid_name,
+            ),
+            title=t("next_period_notification_title", self.hass, date=valid_from.strftime("%d.%m.%Y")),
+            notification_id=f"{DOMAIN}_next_period_{entry.entry_id}",
+        )
+        self.hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_NEXT_PERIOD_NOTIFIED: upcoming["valid_from"]}
+        )
+
+    @staticmethod
+    def _municipal_levy_rp(mname: str, value: float) -> float:
+        """A municipal levy in Rp/kWh from the figure in the operator's
+        file. The format wants CHF/kWh, and no Swiss municipal levy
+        reaches 10 Rp/kWh. Seven operators in the 11/2026 survey publish
+        figures such as 70, 85 or 230 instead of 0.0070, 0.0085 or 0.023:
+        the levy in hundredths of a Rappen. A figure between 0.1 and 10
+        can only be the levy in Rp."""
+        if value > 10:
+            _LOGGER.warning("%s: municipal levy %s is not a CHF/kWh figure, reading it as Rp/kWh divided by 100", mname, value)
+            return round(value / 100, 3)
+        if value > 0.1:
+            _LOGGER.warning("%s: municipal levy %s is not a CHF/kWh figure, reading it as Rp/kWh", mname, value)
+            return round(value, 3)
+        return round(value * 100, 3)
+
+    @classmethod
+    def _parse_tariff_records(cls, tariffs: list[dict]) -> dict:
+        """Energy/grid products, metering fees and municipality levies of
+        one set of records (today's set, or next year's for the preview)."""
+        energy_tariffs: dict[str, dict] = {}
+        grid_tariffs: dict[str, dict] = {}
+        metering_tariffs: dict[str, dict] = {}
+        municipalities: dict[str, dict] = {}
+        secondary_meter_municipalities: dict[str, dict] = {}
+        for t in tariffs:
+            ttype = t.get("tariffType")
+            name = t.get("tariffName", "")
+            if ttype in ("electricity", "grid"):
+                raw_windows = t.get("prices", {}).get("energy") or []
+                if not raw_windows or not any(w.get("price") for w in raw_windows):
+                    # No time windows, or every window priced at zero: a
+                    # dynamic (market-price) product such as BKW "Sonne
+                    # Scheint" or CKW "dynamic", or an operator that left
+                    # the prices out. Nothing here can price it, so it is
+                    # not offered or shown.
+                    _LOGGER.debug("Skipping %s product %r: no price windows", ttype, name)
+                    continue
+                (energy_tariffs if ttype == "electricity" else grid_tariffs)[name] = cls._parse_time_tariff(t)
+            elif ttype == "metering":
+                base = t.get("prices", {}).get("base", {})
+                metering_tariffs[name] = {
+                    "price_chf": base.get("price"),
+                    "unit": base.get("priceUnit"),
+                    "customer_type": t.get("customerType"),
+                    "valid_from": t.get("startDate"),
+                    "valid_to": t.get("endDate"),
+                }
+            elif ttype == "regional_fees":
+                for m in t.get("prices", {}).get("municipalityTaxes", []):
+                    mname = m.get("municipalityName")
+                    if not mname:
+                        continue
+                    energy = m.get("municipalityEnergy", [])
+                    base = m.get("municipalityBase", {})
+                    # A levy that applies to secondary meters only is
+                    # kept apart so it cannot replace the regular one.
+                    target = secondary_meter_municipalities if is_secondary_meter_fee(t) else municipalities
+                    levy = (energy[0].get("price") or 0.0) if energy else 0.0
+                    target[mname] = {
+                        "rp_kwh": cls._municipal_levy_rp(mname, levy),
+                        "base_price_chf": base.get("price", 0),
+                        "valid_from": t.get("startDate"),
+                        "valid_to": t.get("endDate"),
+                        # Operators put the fine print here — BKW notes a
+                        # yearly cap ("Deckelung in CHF/a: 24") on levies
+                        # it publishes as an implausible per-kWh figure.
+                        "comment": m.get("municipalityComment") or None,
+                    }
+        # A municipality that has nothing but a secondary-meter levy
+        # still gets that one rather than none.
+        for mname, levy in secondary_meter_municipalities.items():
+            municipalities.setdefault(mname, levy)
+        return {
+            "energy": energy_tariffs,
+            "grid": grid_tariffs,
+            "metering": metering_tariffs,
+            "municipalities": municipalities,
+        }
 
     @staticmethod
     def _parse_time_tariff(t: dict) -> dict:
@@ -419,6 +666,15 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         is the same information in the shape exposed as an attribute."""
         raw_windows = t.get("prices", {}).get("energy", [])
         prices = [w["price"] for w in raw_windows]
+        language = weekday_language(raw_windows)
+        # The format wants CHF/kWh; a few operators enter Rp/kWh (a
+        # municipal utility publishing 15.9 "CHF/kWh" was found in the
+        # 11/2026 survey). No Swiss tariff exceeds 3 CHF/kWh, so values
+        # above that are read as Rp.
+        if prices and max(prices) > 3:
+            _LOGGER.warning("%s: prices above 3 CHF/kWh in the operator's file, reading them as Rp/kWh", t.get("tariffName"))
+            prices = [p / 100 for p in prices]
+            raw_windows = [{**w, "price": w["price"] / 100} for w in raw_windows]
         windows = [
             {
                 "from": w["from"],
@@ -429,8 +685,8 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                 # leave the minute 23:59–00:00 without any tariff: treated
                 # as end of day.
                 "to_min": _MINUTES_PER_DAY if _parse_hhmm(w["to"]) == _MINUTES_PER_DAY - 1 else _parse_hhmm(w["to"]),
-                "weekdays": w.get("weekdays") or None,
-                "months": w.get("months") or None,
+                "weekdays": normalize_weekdays(w.get("weekdays"), language),
+                "months": normalize_months(w.get("months")),
                 "rp_kwh": round(w["price"] * 100, 3),
                 "level": _price_level(prices, w["price"]),
             }

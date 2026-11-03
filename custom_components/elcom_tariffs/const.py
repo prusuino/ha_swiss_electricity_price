@@ -16,7 +16,7 @@ UPDATE_INTERVAL_HOURS = 24
 # be fetched although it is valid and publicly reachable (#7). The
 # LINDAS directory queries keep the default user agent.
 USER_AGENT = (
-    "SwissElectricityPrice/1.6.0 "
+    "SwissElectricityPrice/1.7.0 "
     "(Home Assistant integration; +https://github.com/prusuino/ha_swiss_electricity_price)"
 )
 OPERATOR_REQUEST_HEADERS = {"User-Agent": USER_AGENT, "Accept": "application/json, */*;q=0.8"}
@@ -42,6 +42,9 @@ CONF_NATIONAL_LEVIES_RP = "national_levies_rp"
 # VSE tariff format prescribes) -> national levies start at 0 instead of the default.
 CONF_GRID_INCLUDES_LEVIES = "grid_includes_levies"
 CONF_VAT_PERCENT = "vat_percent"
+# Start date (ISO) of the upcoming tariff period the user has already been
+# notified about, so the notification is sent once per period.
+CONF_NEXT_PERIOD_NOTIFIED = "next_period_notified"
 
 # Manual tariff entry (fallback when neither the operator's registered link
 # nor a user-supplied URL can be reached / parsed).

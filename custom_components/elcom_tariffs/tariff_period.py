@@ -71,6 +71,23 @@ def select_current_tariffs(tariffs: list[dict], today: date) -> tuple[list[dict]
     return [r for start, _end, r in dated if start == chosen] + undated, "expired"
 
 
+def select_upcoming_tariffs(tariffs: list[dict], today: date) -> tuple[list[dict], date | None]:
+    """The records of the nearest set that starts after `today` — those
+    sharing the earliest future startDate — and that date. ([], None) when
+    the file holds nothing beyond today's set. Operators publish next
+    year's tariffs months ahead (the ElCom deadline is 31 August), so from
+    late summer on most files carry both."""
+    future: list[tuple[date, dict]] = []
+    for record in tariffs:
+        start = parse_iso_date(record.get("startDate"))
+        if start is not None and start > today:
+            future.append((start, record))
+    if not future:
+        return [], None
+    chosen = min(start for start, _r in future)
+    return [r for start, r in future if start == chosen], chosen
+
+
 _SECONDARY_METER_MARKERS = (
     "zweitzähler",
     "zweitzaehler",

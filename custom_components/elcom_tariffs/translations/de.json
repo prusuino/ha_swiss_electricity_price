@@ -66,6 +66,10 @@
     "manual_link_available": {
       "title": "Für {operator} wurde eine funktionierende Tarifdatei gefunden",
       "description": "Dieser Eintrag wurde mit manuell eingegebenen Tarifen eingerichtet, weil damals keine nutzbare Tarifdatei für {operator} gefunden werden konnte. Inzwischen ist eine funktionierende maschinenlesbare Tarifdatei verfügbar. Um von der manuellen Eingabe auf vollautomatische Tarife umzusteigen (inkl. Gemeinde- und Grundgebühr-Sensoren), entferne diesen Integrations-Eintrag und richte ihn neu ein — der Betreiber-Link sollte jetzt beim ersten Versuch funktionieren."
+    },
+    "selection_missing": {
+      "title": "{operator}: gewähltes Tarifprodukt oder Gemeinde nicht mehr in der Tarifdatei",
+      "description": "Die Tarifdatei von {operator} enthält nicht mehr: {missing}. Der Betreiber hat es umbenannt oder entfernt, darum sind die kombinierten Preis-Sensoren, die Tarifstufe und der Hochtarif-Sensor dieses Eintrags nicht verfügbar. Öffne den Dialog «Konfigurieren» des Eintrags und wähle die aktuellen Namen aus der Liste; der Eintrag wird neu geladen und behält Entitäts-IDs und Verlauf."
     }
   }
 }

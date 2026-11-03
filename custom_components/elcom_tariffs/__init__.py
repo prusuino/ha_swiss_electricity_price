@@ -6,9 +6,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
 from .const import CONF_ENERGY_PRODUCT, CONF_GRID_PRODUCT, CONF_MANUAL_HIGH_RP, DOMAIN
-from .coordinator import ElcomManualTariffCoordinator, ElcomTariffCoordinator, manual_issue_id
+from .coordinator import ElcomManualTariffCoordinator, ElcomTariffCoordinator, manual_issue_id, selection_issue_id
 
-PLATFORMS = ["sensor", "binary_sensor", "number"]
+PLATFORMS = ["sensor", "binary_sensor", "calendar", "number"]
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -87,9 +87,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # right after setup if it still applies; an entry on its way out
         # must not leave it behind.
         ir.async_delete_issue(hass, DOMAIN, manual_issue_id(entry))
+        ir.async_delete_issue(hass, DOMAIN, selection_issue_id(entry))
     return unload_ok
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Entry deleted: withdraw the repair issue that told the user to remove it."""
+    """Entry deleted: withdraw the repair issues that belonged to it."""
     ir.async_delete_issue(hass, DOMAIN, manual_issue_id(entry))
+    ir.async_delete_issue(hass, DOMAIN, selection_issue_id(entry))

@@ -27,6 +27,8 @@ All entities are created dynamically from the selected operator's own live JSON 
 | `sensor.elcom_<operator>_<id>_municipality_levy_<municipality>` | Municipal surcharge (Rp/kWh) for each municipality the operator serves. Only the municipality chosen at setup is enabled; the others are created disabled and can be enabled in their entity settings (all are enabled for an entry without a municipality). |
 | `sensor.elcom_<operator>_<id>_tariff_level` | Whether **your configured energy tariff** is currently on high or low tariff. Attributes `next_change` and `next_level` tell when the level changes next and to what. |
 | `binary_sensor.elcom_<operator>_<id>_high_tariff` | On while your configured energy tariff is on its high rate — the handier form of the tariff-level sensor for automation conditions and conditional cards. Only created for tariffs with more than one level. Same `next_change` / `next_level` attributes. |
+| `calendar.elcom_<operator>_<id>_tariff` | Every stretch of high or low tariff of your configured energy tariff as a calendar event (summary = level, description = combined price). Known for any date, since Swiss tariffs are time-of-use schedules; works with calendar triggers and the calendar card. Only created for tariffs with more than one level. |
+| `sensor.elcom_<operator>_<id>_price_next_period` | Combined price under the operator's **next tariff period** (next year's tariffs, published months ahead), evaluated at this very moment so it compares directly with `price_current`. Attributes: `valid_from`, `price_high` / `price_low` of the next period, `current_price_high` / `current_price_low`, `change_high_percent` / `change_low_percent`. Unavailable while the file holds no upcoming set. A notification is sent once when an upcoming period first appears. |
 | `sensor.elcom_<operator>_<id>_price_current` | Combined current price for your configured municipality + energy/grid tariff products, including national levies and VAT, at the rates active right now. Attribute `calculation` spells out the full calculation in plain text. Attributes `raw_today` and `raw_tomorrow` hold the price for every hour of today and tomorrow (`start`, `end`, `value` in CHF/kWh), with `min_today`, `max_today`, `avg_today`, `price_next_hour`, and `next_change` / `next_price` / `next_level` for the next tariff switch — see [Dashboard examples](#dashboard-examples). |
 | `sensor.elcom_<operator>_<id>_price_high` / `_low` | Fixed combined high-tariff / low-tariff price (same formula, at the fixed rate instead of the currently active one). |
 | `sensor.elcom_<operator>_<id>_diagnostics_host` / `_path` / `_filename` | Where the operator's tariff file is currently being fetched from — split into host, directory, and file name so each fits the diagnostics card. The full URL and the ElCom-registered URL are available as attributes on the host sensor. |
@@ -107,6 +109,21 @@ condition:
     entity_id: binary_sensor.elcom_<operator>_<id>_high_tariff
     state: "off"
 ```
+
+**Start the dishwasher 30 minutes before the low tariff begins** (calendar trigger):
+
+```yaml
+trigger:
+  - trigger: calendar
+    entity_id: calendar.elcom_<operator>_<id>_tariff
+    event: start
+    offset: "-00:30:00"
+condition:
+  - condition: template
+    value_template: "{{ trigger.calendar_event.summary == 'Low tariff' }}"
+```
+
+The event summary is the tariff level in your Home Assistant language ("Niedertarif" on a German instance).
 
 ## Language
 

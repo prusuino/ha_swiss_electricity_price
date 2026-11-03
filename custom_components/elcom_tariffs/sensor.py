@@ -116,6 +116,7 @@ async def async_setup_entry(
         entities.append(ElcomPriceCurrentSensor(hass, coordinator, entry, prefix))
         entities.append(ElcomPriceLevelSensor(hass, coordinator, entry, "high", prefix))
         entities.append(ElcomPriceLevelSensor(hass, coordinator, entry, "low", prefix))
+        entities.append(ElcomNextPeriodPriceSensor(hass, coordinator, entry, prefix))
     async_add_entities(entities)
 
     # Product, base-fee, metering-fee and municipality entities follow the operator's
@@ -825,6 +826,111 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
             "energy_product": energy_product,
             "grid_product": grid_product,
         }
+
+
+def _level_rp(product: dict, key: str) -> float:
+    """A product's high or low rate; a flat product has only its one rate."""
+    value = product.get(key)
+    return value if value is not None else product["windows"][0]["rp_kwh"]
+
+
+class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
+    """Preview of the combined price under the operator's NEXT tariff
+    period (next year's tariffs, which operators publish months ahead):
+    the same formula as the current price sensor, evaluated with the
+    upcoming set at this very moment, so the two are directly comparable.
+    Attributes carry the fixed high/low prices of both periods and the
+    change in percent. Unavailable while the file holds no upcoming set
+    or the configured products are not in it."""
+
+    _attr_has_entity_name = False
+    _attr_native_unit_of_measurement = "CHF/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:calendar-arrow-right"
+
+    def __init__(
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, prefix: str
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._hass_ref = hass
+        self._attr_name = t("next_period_price_name", hass)
+        self._attr_unique_id = f"{entry.entry_id}_price_next_period"
+        self._attr_device_info = device_info(hass, entry)
+        self.entity_id = f"sensor.{prefix}_price_next_period"
+
+    def _national_levies_rp(self) -> float:
+        return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
+
+    def _vat_percent(self) -> float:
+        return self._entry.options.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
+
+    def _components(self) -> dict | None:
+        """Next period's energy/grid product and municipal levy (next
+        period's own levy when it publishes one, else today's)."""
+        data = self.coordinator.data or {}
+        upcoming = data.get("next_period")
+        if not upcoming:
+            return None
+        energy = upcoming.get("energy", {}).get(self._entry.data.get(CONF_ENERGY_PRODUCT))
+        grid = upcoming.get("grid", {}).get(self._entry.data.get(CONF_GRID_PRODUCT))
+        if not energy or not grid:
+            return None
+        municipality = self._entry.data.get(CONF_MUNICIPALITY, "")
+        municipalities = upcoming.get("municipalities") or data.get("municipalities", {})
+        levy = municipalities.get(municipality) if municipalities else {"rp_kwh": 0.0}
+        if levy is None:
+            return None
+        return {"energy": energy, "grid": grid, "municipality_rp": levy.get("rp_kwh") or 0.0, "valid_from": upcoming["valid_from"]}
+
+    def _combined(self, energy_rp: float, grid_rp: float, municipality_rp: float) -> float:
+        total_rp = energy_rp + grid_rp + municipality_rp + self._national_levies_rp()
+        return round(total_rp * (1 + self._vat_percent() / 100) / 100, 5)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._components() is not None
+
+    @property
+    def native_value(self):
+        c = self._components()
+        if not c:
+            return None
+        now = dt_util.now()
+        return self._combined(
+            current_rate(c["energy"], now)[0] or 0, current_rate(c["grid"], now)[0] or 0, c["municipality_rp"]
+        )
+
+    @property
+    def extra_state_attributes(self):
+        c = self._components()
+        if not c:
+            return {}
+        current = _calculation_components(self.coordinator, self._entry)
+        attrs = {
+            "valid_from": c["valid_from"],
+            "energy_product": self._entry.data.get(CONF_ENERGY_PRODUCT),
+            "grid_product": self._entry.data.get(CONF_GRID_PRODUCT),
+            "municipality": self._entry.data.get(CONF_MUNICIPALITY, ""),
+            "energy_rp_kwh_high": _level_rp(c["energy"], "high_rp_kwh"),
+            "energy_rp_kwh_low": _level_rp(c["energy"], "low_rp_kwh"),
+            "grid_rp_kwh_high": _level_rp(c["grid"], "high_rp_kwh"),
+            "grid_rp_kwh_low": _level_rp(c["grid"], "low_rp_kwh"),
+            "municipality_rp_kwh": c["municipality_rp"],
+        }
+        for level in ("high", "low"):
+            key = f"{level}_rp_kwh"
+            new = self._combined(_level_rp(c["energy"], key), _level_rp(c["grid"], key), c["municipality_rp"])
+            attrs[f"price_{level}"] = new
+            if current:
+                old = self._combined(
+                    _level_rp(current["energy"], key),
+                    _level_rp(current["grid"], key),
+                    current["municipality"]["rp_kwh"] or 0,
+                )
+                attrs[f"current_price_{level}"] = old
+                attrs[f"change_{level}_percent"] = round((new - old) / old * 100, 1) if old else None
+        return attrs
 
 
 def _manual_entities(

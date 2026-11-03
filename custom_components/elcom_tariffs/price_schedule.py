@@ -22,6 +22,16 @@ from datetime import datetime, timedelta, timezone
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from .const import (
+    CONF_ENERGY_PRODUCT,
+    CONF_GRID_PRODUCT,
+    CONF_MANUAL_HIGH_RP,
+    CONF_MUNICIPALITY,
+    CONF_NATIONAL_LEVIES_RP,
+    CONF_VAT_PERCENT,
+    DEFAULT_NATIONAL_LEVIES_RP,
+    DEFAULT_VAT_PERCENT,
+)
 from .coordinator import current_rate, next_switch_time
 from .localization import tariff_level_text
 
@@ -76,6 +86,66 @@ def localized(attributes: dict, hass: HomeAssistant) -> dict:
     attributes = dict(attributes)
     attributes["next_level"] = tariff_level_text(attributes.pop("next_level_key", None), hass)
     return attributes
+
+
+def entry_price_at(coordinator, entry) -> tuple[PriceAt, list[dict]] | None:
+    """The configured entry's combined price function plus the products
+    whose windows mark its boundaries — automatic or manual entry alike.
+    None while the configured products (or the chosen municipality, in a
+    file that has a municipality section) are not in the fetched data."""
+    data = coordinator.data or {}
+    levies = entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
+    vat = entry.options.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
+    if CONF_MANUAL_HIGH_RP in entry.data:
+        return (manual_price_at(data, levies, vat), [data]) if data else None
+    energy = data.get("energy", {}).get(entry.data.get(CONF_ENERGY_PRODUCT))
+    grid = data.get("grid", {}).get(entry.data.get(CONF_GRID_PRODUCT))
+    if not energy or not grid:
+        return None
+    municipalities = data.get("municipalities", {})
+    municipality_rp = 0.0
+    if municipalities:
+        levy = municipalities.get(entry.data.get(CONF_MUNICIPALITY, ""))
+        if levy is None:
+            return None
+        municipality_rp = levy.get("rp_kwh") or 0.0
+    return combined_price_at(energy, grid, municipality_rp, levies, vat), [energy, grid]
+
+
+def entry_level_product(coordinator, entry) -> dict | None:
+    """The product whose windows define the tariff level: the configured
+    energy product, or the manual entry's own windows."""
+    data = coordinator.data or {}
+    if CONF_MANUAL_HIGH_RP in entry.data:
+        return data or None
+    return data.get("energy", {}).get(entry.data.get(CONF_ENERGY_PRODUCT)) or None
+
+
+def level_segments(level_at: Callable[[datetime], str | None], products: list[dict], start: datetime, end: datetime):
+    """Yields (start, end, level key) stretches of constant tariff level,
+    beginning with the stretch in force at `start` (with its true start,
+    found by walking forward from a week earlier — time-of-use schedules
+    repeat weekly at most, apart from seasons) and ending with the one in
+    force at `end` (with its true end). A flat tariff yields nothing."""
+    t = start - timedelta(days=7)
+    level = level_at(t)
+    while t < end:
+        change = next_change(level_at, products, t)
+        if change is None:
+            return
+        if change > start:
+            yield t, change, level
+        t = change
+        level = level_at(t)
+
+
+def segment_containing(level_at: Callable[[datetime], str | None], products: list[dict], moment: datetime) -> tuple[datetime, datetime, str | None] | None:
+    """The stretch of constant tariff level around `moment`, or None for a
+    flat tariff."""
+    for seg_start, seg_end, level in level_segments(level_at, products, moment, moment):
+        if seg_start <= moment < seg_end:
+            return seg_start, seg_end, level
+    return None
 
 
 def hourly_slots(price_at: PriceAt, start: datetime, end: datetime) -> list[dict]:

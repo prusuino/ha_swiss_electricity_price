@@ -66,6 +66,10 @@
     "manual_link_available": {
       "title": "È stato trovato un file tariffario funzionante per {operator}",
       "description": "Questa voce è stata configurata con tariffe inserite manualmente perché all'epoca non era stato possibile trovare un file tariffario utilizzabile per {operator}. Ora è disponibile un file tariffario leggibile da macchina funzionante. Per passare dall'inserimento manuale alle tariffe completamente automatiche (con sensori di comune e tassa di base), rimuovi questa voce di integrazione e configurala di nuovo — il link dell'operatore dovrebbe ora funzionare al primo tentativo."
+    },
+    "selection_missing": {
+      "title": "{operator}: prodotto tariffario o comune scelti non più presenti nel file tariffario",
+      "description": "Il file tariffario di {operator} non contiene più: {missing}. L'operatore lo ha rinominato o rimosso, quindi i sensori di prezzo combinati, il livello tariffario e il sensore di tariffa alta di questa voce non sono disponibili. Apri il dialogo «Configura» della voce e scegli i nomi attuali dall'elenco; la voce viene ricaricata e mantiene ID delle entità e cronologia."
     }
   }
 }

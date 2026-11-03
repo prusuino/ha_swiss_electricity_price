@@ -66,6 +66,10 @@
     "manual_link_available": {
       "title": "A working tariff file was found for {operator}",
       "description": "This entry was set up with manually entered rates because no usable tariff file could be found for {operator} at the time. A working machine-readable tariff file is now available. To switch from manual entry to full automatic tariffs (with municipality and metering-fee sensors), remove this integration entry and set it up again — the operator's link should now resolve on the first try."
+    },
+    "selection_missing": {
+      "title": "{operator}: chosen tariff product or municipality no longer in the tariff file",
+      "description": "The tariff file of {operator} no longer contains: {missing}. The operator renamed or removed it, so the combined price sensors, the tariff level and the high-tariff sensor of this entry are unavailable. Open the entry's Configure dialog and choose the current names from the list; the entry reloads and keeps its entity ids and history."
     }
   }
 }

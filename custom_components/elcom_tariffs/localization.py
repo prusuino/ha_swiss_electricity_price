@@ -138,6 +138,50 @@ STRINGS: dict[str, dict[str, str]] = {
         "fr": "Redevance de base",
         "it": "Tassa di base",
     },
+    "next_period_price_name": {
+        "de": "Strompreis nächste Tarifperiode",
+        "en": "Electricity Price Next Tariff Period",
+        "fr": "Prix de l'électricité prochaine période tarifaire",
+        "it": "Prezzo dell'elettricità prossimo periodo tariffario",
+    },
+    "calendar_name": {
+        "de": "Tarifkalender",
+        "en": "Tariff Calendar",
+        "fr": "Calendrier tarifaire",
+        "it": "Calendario tariffario",
+    },
+    "next_period_notification_title": {
+        "de": "Neue Stromtarife ab {date}",
+        "en": "New electricity tariffs from {date}",
+        "fr": "Nouveaux tarifs d'électricité dès le {date}",
+        "it": "Nuove tariffe elettriche dal {date}",
+    },
+    "next_period_notification": {
+        "de": (
+            "{operator} hat die Tarife ab {date} veröffentlicht. Energie + Netz ({energy_product} + {grid_product}), "
+            "ohne Abgaben und MWST: Hochtarif {old_high:.2f} → {new_high:.2f} Rp/kWh ({high_pct:+.1f} %), "
+            "Niedertarif {old_low:.2f} → {new_low:.2f} Rp/kWh ({low_pct:+.1f} %). "
+            "Details im Sensor «Strompreis nächste Tarifperiode»."
+        ),
+        "en": (
+            "{operator} has published its tariffs from {date}. Energy + grid ({energy_product} + {grid_product}), "
+            "before levies and VAT: high tariff {old_high:.2f} → {new_high:.2f} Rp/kWh ({high_pct:+.1f} %), "
+            "low tariff {old_low:.2f} → {new_low:.2f} Rp/kWh ({low_pct:+.1f} %). "
+            "Details in the sensor \"Electricity Price Next Tariff Period\"."
+        ),
+        "fr": (
+            "{operator} a publié ses tarifs dès le {date}. Énergie + réseau ({energy_product} + {grid_product}), "
+            "hors redevances et TVA : tarif haut {old_high:.2f} → {new_high:.2f} ct./kWh ({high_pct:+.1f} %), "
+            "tarif bas {old_low:.2f} → {new_low:.2f} ct./kWh ({low_pct:+.1f} %). "
+            "Détails dans le capteur « Prix de l'électricité prochaine période tarifaire »."
+        ),
+        "it": (
+            "{operator} ha pubblicato le tariffe dal {date}. Energia + rete ({energy_product} + {grid_product}), "
+            "senza oneri e IVA: tariffa alta {old_high:.2f} → {new_high:.2f} ct./kWh ({high_pct:+.1f} %), "
+            "tariffa bassa {old_low:.2f} → {new_low:.2f} ct./kWh ({low_pct:+.1f} %). "
+            "Dettagli nel sensore «Prezzo dell'elettricità prossimo periodo tariffario»."
+        ),
+    },
     "high_tariff_name": {
         "de": "Hochtarif aktiv",
         "en": "High Tariff Active",

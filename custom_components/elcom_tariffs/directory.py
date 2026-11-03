@@ -199,6 +199,33 @@ async def async_fetch_operator_url(
     return bindings[0]["url"]["value"] if bindings else None
 
 
+_LINK_RE = re.compile(r"""href=["']([^"']+\.json(?:\?[^"']*)?)["']""", re.IGNORECASE)
+# Links every modern site carries that are JSON but not tariffs: a web-app
+# manifest next to the favicons was picked up for five operators in the
+# 11/2026 survey.
+_NOT_A_TARIFF = ("manifest", "webmanifest", "favicon", "/wp-json", "schema", "sitemap")
+_TARIFF_HINTS = ("tarif", "tariff", "strom", "preis", "price", "prix", "prezz", "energ", "elcom", "maschin", "machine")
+
+
+def _pick_tariff_link(html: str) -> str | None:
+    """The most plausible tariff-file link on an operator's page: a .json
+    link whose name mentions tariffs or prices first, otherwise the first
+    .json link that is not site furniture."""
+    candidates = []
+    for found in _LINK_RE.findall(html):
+        low = found.lower()
+        if any(marker in low for marker in _NOT_A_TARIFF):
+            continue
+        if found not in candidates:
+            candidates.append(found)
+    if not candidates:
+        return None
+    for found in candidates:
+        if any(hint in found.lower() for hint in _TARIFF_HINTS):
+            return found
+    return candidates[0]
+
+
 async def async_resolve_tariff_url(hass: HomeAssistant, registered_url: str) -> str:
     """Resolve an operator's registered URL to an actual machine-readable
     tariff JSON URL.
@@ -227,12 +254,11 @@ async def async_resolve_tariff_url(hass: HomeAssistant, registered_url: str) -> 
         return final_url
 
     html = body.decode("utf-8", errors="replace")
-    match = re.search(r'href="([^"]+\.json)"', html)
-    if not match:
+    found = _pick_tariff_link(html)
+    if not found:
         raise ValueError(
             f"No machine-readable tariff file could be found at the registered URL ({registered_url})"
         )
-    found = match.group(1)
     if found.startswith("/"):
         from urllib.parse import urlsplit
 
