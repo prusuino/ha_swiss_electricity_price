@@ -1,6 +1,6 @@
 # Swiss Electricity Price (ElCom)
 
-![Swiss Electricity Price](docs/readme-header.png)
+![Swiss Electricity Price](https://raw.githubusercontent.com/prusuino/ha_swiss_electricity_price/main/docs/readme-header.png)
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
