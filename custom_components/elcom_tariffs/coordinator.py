@@ -447,6 +447,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             "high_rp_kwh": high_rp,
             "low_rp_kwh": low_rp,
             "base_price_chf_month": base.get("price", 0),
+            "base_price_unit": base.get("priceUnit"),
             "customer_type": t.get("customerType"),
             "valid_from": t.get("startDate"),
             "valid_to": t.get("endDate"),

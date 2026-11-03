@@ -16,7 +16,7 @@ UPDATE_INTERVAL_HOURS = 24
 # be fetched although it is valid and publicly reachable (#7). The
 # LINDAS directory queries keep the default user agent.
 USER_AGENT = (
-    "SwissElectricityPrice/1.5.2 "
+    "SwissElectricityPrice/1.5.3 "
     "(Home Assistant integration; +https://github.com/prusuino/ha_swiss_electricity_price)"
 )
 OPERATOR_REQUEST_HEADERS = {"User-Agent": USER_AGENT, "Accept": "application/json, */*;q=0.8"}

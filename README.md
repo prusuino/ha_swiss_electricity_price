@@ -20,6 +20,7 @@ All entities are created dynamically from the selected operator's own live JSON 
 |---|---|
 | `sensor.elcom_<operator>_<id>_energy_<product>` / `..._grid_<product>` | All energy and grid tariff products the operator publishes. State = the Rp/kWh rate active right now, with automatic high/low tariff switching by weekday + time where applicable — the state changes at the minute a tariff window starts or ends (e.g. 22:00 and 06:00). Attribute `schedule` lists all time windows. |
 | `..._energy_<product>_high` / `_low` (likewise for `grid`) | Fixed high-tariff / low-tariff reference price for each product, independent of the current time. Only created for products with more than one price level. |
+| `..._energy_<product>_base_fee` / `..._grid_<product>_base_fee` | Monthly base fee of the product (CHF/month, or the unit the operator's file names). Only created for products with a base price above 0. Only the energy and grid product chosen at setup are enabled; the others are created disabled and can be enabled in their entity settings. |
 | `sensor.elcom_<operator>_<id>_metering_<type>` | Metering fees (CHF/month, flat rate), if published. |
 | `sensor.elcom_<operator>_<id>_municipality_levy_<municipality>` | Municipal surcharge (Rp/kWh) for each municipality the operator serves. Only the municipality chosen at setup is enabled; the others are created disabled and can be enabled in their entity settings (all are enabled for an entry without a municipality). |
 | `sensor.elcom_<operator>_<id>_tariff_level` | Whether **your configured energy tariff** is currently on high or low tariff. |
@@ -80,7 +81,7 @@ The integration is listed in the HACS default store, so no custom repository is 
 4. If your operator's link still doesn't work, select it anyway and paste the actual tariff file URL into **Manual tariff file URL** — find it on the operator's own website (it's a JSON file, usually linked from a "tariffs" or "Strompreise" page). This is the recommended fix when ElCom's own registry entry for your operator is stale or broken, which happens for a meaningful share of Swiss operators.
 5. Choose your **municipality**, then your **energy tariff product** and **grid tariff product**, populated live from the selected operator's own tariff file — picked separately since operators don't always name or categorize their energy and grid products the same way, so pairing them automatically isn't reliable.
 6. Say whether the operator's **grid tariff already includes the federal levies** (ticked by default) — see the next section for how to tell.
-7. Done — all tariff, municipality, diagnostic, and metering-fee sensors appear immediately. National levies and VAT can be adjusted afterwards via the integration's **Configure** dialog.
+7. Done — all tariff, base-fee, municipality, diagnostic, and metering-fee sensors appear immediately. National levies and VAT can be adjusted afterwards via the integration's **Configure** dialog.
 
 ### National levies: included in the grid tariff or not?
 

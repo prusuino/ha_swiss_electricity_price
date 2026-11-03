@@ -1,5 +1,6 @@
 """Sensors for the Swiss Electricity Price (ElCom) integration — all tariff
-products + municipality levies + combined price, for the selected grid operator."""
+products (rate, high/low reference prices, monthly base fee) + metering fees
++ municipality levies + combined price, for the selected grid operator."""
 from __future__ import annotations
 
 import hashlib
@@ -32,6 +33,29 @@ from .device import device_info, entity_id_prefix
 from .localization import t, tariff_level_text
 
 _YEAR_RE = re.compile(r"(20\d{2})")
+
+# Units the VSE tariff format uses for flat fees (prices.base.priceUnit),
+# spelled out for display. Anything unknown is shown as the file has it.
+_FEE_UNITS = {
+    "CHF/M": "CHF/month",
+    "CHF/MONAT": "CHF/month",
+    "CHF/MONTH": "CHF/month",
+    "CHF/J": "CHF/year",
+    "CHF/A": "CHF/year",
+    "CHF/Y": "CHF/year",
+    "CHF/JAHR": "CHF/year",
+    "CHF/YEAR": "CHF/year",
+    "CHF/D": "CHF/day",
+    "CHF/TAG": "CHF/day",
+    "CHF/DAY": "CHF/day",
+}
+
+
+def _fee_unit(raw: str | None) -> str:
+    """Display unit of a flat fee; CHF/month when the file names none."""
+    if not raw:
+        return "CHF/month"
+    return _FEE_UNITS.get(raw.strip().upper(), raw.strip())
 
 
 class _SlugBook:
@@ -85,7 +109,7 @@ async def async_setup_entry(
         entities.append(ElcomPriceLevelSensor(hass, coordinator, entry, "low", prefix))
     async_add_entities(entities)
 
-    # Product, metering-fee and municipality entities follow the operator's
+    # Product, base-fee, metering-fee and municipality entities follow the operator's
     # file: whatever the latest fetch contains and hasn't been created yet
     # is added (a product that first appears in next year's file shows up
     # without a reload). Entities whose key later disappears from the file
@@ -111,6 +135,9 @@ async def async_setup_entry(
                     known.add((category, name, "levels"))
                     new.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "high_rp_kwh", prefix, slug))
                     new.append(ElcomTariffLevelSensor(hass, coordinator, entry, category, name, "low_rp_kwh", prefix, slug))
+                if (d.get("base_price_chf_month") or 0) > 0 and (category, name, "base_fee") not in known:
+                    known.add((category, name, "base_fee"))
+                    new.append(ElcomBaseFeeSensor(hass, coordinator, entry, category, name, prefix, slug))
         slugs.claim("metering", list(data.get("metering", {})))
         for name in data.get("metering", {}):
             if ("metering", name) not in known:
@@ -225,6 +252,60 @@ class ElcomTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEn
         if not d:
             return {}
         return {
+            "customer_type": d.get("customer_type"),
+            "valid_from": d.get("valid_from"),
+            "valid_to": d.get("valid_to"),
+        }
+
+
+class ElcomBaseFeeSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
+    """Fixed base fee of an energy or grid tariff product (CHF/month as a
+    rule; the unit follows the operator's file). Created only for products
+    whose base price is above zero. Only the products chosen at setup start
+    enabled — an operator can publish dozens of products, and the base fee
+    of a product you are not on is rarely of interest; the others can be
+    enabled in their entity settings. The fee is not part of the per-kWh
+    price sensors, which is why it is a separate entity."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:cash"
+
+    def __init__(
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
+        category: str, name: str, prefix: str, slug: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._category = category
+        self._name_key = name
+        self._attr_name = f"{name} ({t('grid_fee_name', hass)})"
+        selected = entry.data.get(CONF_ENERGY_PRODUCT if category == "energy" else CONF_GRID_PRODUCT)
+        self._attr_entity_registry_enabled_default = not selected or name == selected
+        self._attr_unique_id = f"{entry.entry_id}_{category}_{slug}_base_fee"
+        self._attr_device_info = device_info(hass, entry)
+        self.entity_id = f"sensor.{prefix}_{category}_{slug}_base_fee"
+
+    def _data(self) -> dict:
+        return (self.coordinator.data or {}).get(self._category, {}).get(self._name_key, {})
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._data())
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return _fee_unit(self._data().get("base_price_unit"))
+
+    @property
+    def native_value(self):
+        return self._data().get("base_price_chf_month")
+
+    @property
+    def extra_state_attributes(self):
+        d = self._data()
+        if not d:
+            return {}
+        return {
+            "price_unit": d.get("base_price_unit"),
             "customer_type": d.get("customer_type"),
             "valid_from": d.get("valid_from"),
             "valid_to": d.get("valid_to"),
@@ -423,10 +504,9 @@ class ElcomTariffStatusSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
 
 
 class ElcomMeteringSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
-    """Fixed monthly metering fee."""
+    """Fixed metering fee (CHF/month as a rule; the unit follows the operator's file)."""
 
     _attr_has_entity_name = False
-    _attr_native_unit_of_measurement = "CHF/month"
     _attr_icon = "mdi:meter-electric"
 
     def __init__(
@@ -446,6 +526,10 @@ class ElcomMeteringSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntit
     @property
     def available(self) -> bool:
         return super().available and bool(self._data())
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return _fee_unit(self._data().get("unit"))
 
     @property
     def native_value(self):

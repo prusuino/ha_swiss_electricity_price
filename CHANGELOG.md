@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.3 — 2026-11-03
+
+- New: a **base fee sensor** for every energy and grid product that carries a monthly base price (`sensor.elcom_<operator>_<id>_grid_<product>_base_fee`, likewise for `energy`; CHF/month, or the unit the operator's file names). The base price used to be available only as an attribute of the product's rate sensor, while the metering fee had a sensor of its own. Only the sensors of the energy and grid product chosen at setup start enabled; those of the operator's other products are created disabled and can be enabled in their entity settings, like the municipality levies since 1.5.1. Products with a base price of 0 get no sensor. (#7, requested by @kunoGit)
+- The metering fee sensor shows the unit named in the operator's file instead of always `CHF/month` (`CHF/M` is still shown as `CHF/month`).
+- Existing entities are not changed; the new sensors are added after the update without a reload. The base fee is a flat amount per month and is deliberately not part of the per-kWh price sensors.
+
 ## 1.5.2 — 2026-11-02
 
 - Fixed: an operator whose web server rejects Home Assistant's default user agent could not be set up and showed no values, although its registered tariff file is valid and publicly reachable. Technische Betriebe Flawil (TBF) answers every request whose user agent contains `aiohttp` with HTTP 406 Not Acceptable; Home Assistant's shared HTTP session identifies itself as `HomeAssistant/<version> aiohttp/<version> Python/<version>`. Requests to an operator's host (tariff file, link verification, auto-detection page) now carry the integration's own user agent, `SwissElectricityPrice/<version> (Home Assistant integration; +repository link)`. The ElCom directory queries are unchanged. (#7, reported by @kunoGit)
