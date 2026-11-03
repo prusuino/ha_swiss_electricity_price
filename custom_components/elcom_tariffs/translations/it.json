@@ -49,10 +49,17 @@
       "init": {
         "title": "Impostazioni prezzo dell'elettricità",
         "data": {
+          "municipality": "Comune",
+          "energy_product": "Prodotto tariffario energia",
+          "grid_product": "Prodotto tariffario rete",
           "national_levies_rp": "Oneri nazionali sull'elettricità (Rp/kWh)",
           "vat_percent": "Aliquota IVA (%)"
-        }
+        },
+        "description": "Oneri nazionali e aliquota IVA valgono per i sensori di prezzo combinati. Per una voce basata sul file tariffario di {operator}, il comune e i prodotti tariffari energia e rete possono essere scelti di nuovo qui dal file attuale: gli operatori rinominano i prodotti o ristrutturano il file da un anno all'altro, e i sensori di prezzo combinati restano non disponibili finché non vengono scelti i nomi attuali. Una modifica ricarica la voce; gli ID delle entità e la cronologia vengono mantenuti."
       }
+    },
+    "error": {
+      "already_configured": "Un'altra voce utilizza già questo comune e questi prodotti tariffari."
     }
   },
   "issues": {

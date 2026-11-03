@@ -209,11 +209,10 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                         self._selected = {**operator, "url": url_to_use, "resolved_url": None}
                         return await self.async_step_manual()
                     else:
-                        if (
-                            not _list_municipalities(self._raw)
-                            or not _list_products(self._raw, "electricity")
-                            or not _list_products(self._raw, "grid")
-                        ):
+                        # A file without a municipality section is fine
+                        # (no municipal levy is added then); without energy
+                        # or grid products there is nothing to combine.
+                        if not _list_products(self._raw, "electricity") or not _list_products(self._raw, "grid"):
                             self._selected = {**operator, "url": url_to_use, "resolved_url": resolved_url}
                             return await self.async_step_manual()
                         else:
@@ -262,25 +261,23 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             grid_includes_levies = bool(user_input.get(CONF_GRID_INCLUDES_LEVIES, True))
+            # Empty when the operator's file has no municipality section:
+            # no municipal levy is added to the combined price then.
+            municipality = user_input.get(CONF_MUNICIPALITY, "") if municipalities else ""
             await self.async_set_unique_id(
-                f"{self._selected['id']}_{user_input[CONF_MUNICIPALITY]}_"
-                f"{user_input[CONF_ENERGY_PRODUCT]}_{user_input[CONF_GRID_PRODUCT]}"
+                _unique_id(
+                    self._selected["id"], municipality, user_input[CONF_ENERGY_PRODUCT], user_input[CONF_GRID_PRODUCT]
+                )
             )
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
-                title=t(
-                    "device_name",
-                    self.hass,
-                    operator=self._selected["name"],
-                    municipality=user_input[CONF_MUNICIPALITY],
-                    energy_product=user_input[CONF_ENERGY_PRODUCT],
-                ),
+                title=_entry_title(self.hass, self._selected["name"], municipality, user_input[CONF_ENERGY_PRODUCT]),
                 data={
                     CONF_OPERATOR_ID: self._selected["id"],
                     CONF_OPERATOR_NAME: self._selected["name"],
                     CONF_TARIFF_URL: self._selected["url"],
                     CONF_URL_IS_MANUAL: self._selected.get("is_manual_url", False),
-                    CONF_MUNICIPALITY: user_input[CONF_MUNICIPALITY],
+                    CONF_MUNICIPALITY: municipality,
                     CONF_ENERGY_PRODUCT: user_input[CONF_ENERGY_PRODUCT],
                     CONF_GRID_PRODUCT: user_input[CONF_GRID_PRODUCT],
                     CONF_GRID_INCLUDES_LEVIES: grid_includes_levies,
@@ -295,17 +292,15 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
             )
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_MUNICIPALITY, default=municipalities[0]): vol.In(municipalities),
-                vol.Required(CONF_ENERGY_PRODUCT, default=energy_products[0]): vol.In(energy_products),
-                vol.Required(CONF_GRID_PRODUCT, default=grid_products[0]): vol.In(grid_products),
-                vol.Required(CONF_GRID_INCLUDES_LEVIES, default=True): bool,
-            }
-        )
+        fields: dict[Any, Any] = {}
+        if municipalities:
+            fields[vol.Required(CONF_MUNICIPALITY, default=municipalities[0])] = vol.In(municipalities)
+        fields[vol.Required(CONF_ENERGY_PRODUCT, default=energy_products[0])] = vol.In(energy_products)
+        fields[vol.Required(CONF_GRID_PRODUCT, default=grid_products[0])] = vol.In(grid_products)
+        fields[vol.Required(CONF_GRID_INCLUDES_LEVIES, default=True)] = bool
         return self.async_show_form(
             step_id="location",
-            data_schema=schema,
+            data_schema=vol.Schema(fields),
             description_placeholders={"operator": self._selected["name"]},
         )
 
@@ -377,23 +372,118 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
         return ElcomTariffOptionsFlow()
 
 
+def _entry_title(hass, operator: str, municipality: str, energy_product: str) -> str:
+    if municipality:
+        return t("device_name", hass, operator=operator, municipality=municipality, energy_product=energy_product)
+    return t("device_name_no_municipality", hass, operator=operator, energy_product=energy_product)
+
+
+def _unique_id(operator_id: str, municipality: str, energy_product: str, grid_product: str) -> str:
+    return f"{operator_id}_{municipality}_{energy_product}_{grid_product}"
+
+
+def _select(options: list[str], current: str | None) -> tuple[SelectSelector, str]:
+    """A dropdown over the operator's current names, defaulting to the
+    stored choice when the file still has it and to the first name
+    otherwise (the stored one was renamed or dropped)."""
+    selector = SelectSelector(
+        SelectSelectorConfig(
+            options=[SelectOptionDict(value=o, label=o) for o in options],
+            mode=SelectSelectorMode.DROPDOWN,
+            sort=False,
+        )
+    )
+    return selector, current if current in options else options[0]
+
+
 class ElcomTariffOptionsFlow(OptionsFlow):
-    """Change the national levies / VAT rate after setup."""
+    """Change the national levies / VAT rate after setup and, for an entry
+    based on the operator's tariff file, re-select municipality and
+    energy/grid product from the file as it is today. Operators rename
+    products or restructure the file between years (TBF prefixed every
+    product name with "TBF " and dropped the municipality section in
+    November 2026), and the combined-price sensors stay unavailable until
+    the current names are chosen — which used to take removing the entry
+    and setting it up again, losing renames and history."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+        entry = self.config_entry
+        errors: dict[str, str] = {}
+        coordinator = self.hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        data: dict = {}
+        if CONF_MANUAL_HIGH_RP not in entry.data and coordinator is not None and coordinator.data:
+            data = coordinator.data
+        energy_products = list(data.get("energy", {}))
+        grid_products = list(data.get("grid", {}))
+        municipalities = sorted(data.get("municipalities", {}))
+        selectable = bool(energy_products and grid_products)
 
-        current = self.config_entry.options
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_NATIONAL_LEVIES_RP,
-                    default=current.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP),
-                ): vol.Coerce(float),
-                vol.Required(
-                    CONF_VAT_PERCENT, default=current.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
-                ): vol.Coerce(float),
+        if user_input is not None:
+            options = {
+                CONF_NATIONAL_LEVIES_RP: user_input[CONF_NATIONAL_LEVIES_RP],
+                CONF_VAT_PERCENT: user_input[CONF_VAT_PERCENT],
             }
+            if selectable:
+                new_data = {
+                    **entry.data,
+                    CONF_ENERGY_PRODUCT: user_input[CONF_ENERGY_PRODUCT],
+                    CONF_GRID_PRODUCT: user_input[CONF_GRID_PRODUCT],
+                }
+                if municipalities:
+                    new_data[CONF_MUNICIPALITY] = user_input[CONF_MUNICIPALITY]
+                if new_data != dict(entry.data):
+                    unique_id = _unique_id(
+                        new_data[CONF_OPERATOR_ID],
+                        new_data.get(CONF_MUNICIPALITY, ""),
+                        new_data[CONF_ENERGY_PRODUCT],
+                        new_data[CONF_GRID_PRODUCT],
+                    )
+                    if any(
+                        e.unique_id == unique_id and e.entry_id != entry.entry_id
+                        for e in self.hass.config_entries.async_entries(DOMAIN)
+                    ):
+                        errors["base"] = "already_configured"
+                    else:
+                        self.hass.config_entries.async_update_entry(
+                            entry,
+                            data=new_data,
+                            unique_id=unique_id,
+                            title=_entry_title(
+                                self.hass,
+                                new_data[CONF_OPERATOR_NAME],
+                                new_data.get(CONF_MUNICIPALITY, ""),
+                                new_data[CONF_ENERGY_PRODUCT],
+                            ),
+                        )
+                        # The chosen products feed the combined-price sensors,
+                        # the base-fee defaults, the device name and the
+                        # high-tariff binary sensor: a reload applies them all.
+                        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+            if not errors:
+                return self.async_create_entry(title="", data=options)
+
+        current = entry.options
+        fields: dict[Any, Any] = {}
+        if selectable:
+            if municipalities:
+                selector, default = _select(municipalities, entry.data.get(CONF_MUNICIPALITY))
+                fields[vol.Required(CONF_MUNICIPALITY, default=default)] = selector
+            selector, default = _select(energy_products, entry.data.get(CONF_ENERGY_PRODUCT))
+            fields[vol.Required(CONF_ENERGY_PRODUCT, default=default)] = selector
+            selector, default = _select(grid_products, entry.data.get(CONF_GRID_PRODUCT))
+            fields[vol.Required(CONF_GRID_PRODUCT, default=default)] = selector
+        fields[
+            vol.Required(
+                CONF_NATIONAL_LEVIES_RP,
+                default=current.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP),
+            )
+        ] = vol.Coerce(float)
+        fields[vol.Required(CONF_VAT_PERCENT, default=current.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT))] = vol.Coerce(
+            float
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(fields),
+            errors=errors,
+            description_placeholders={"operator": entry.data.get(CONF_OPERATOR_NAME, "")},
+        )

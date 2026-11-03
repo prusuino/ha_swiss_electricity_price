@@ -369,6 +369,10 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                             "base_price_chf": base.get("price", 0),
                             "valid_from": t.get("startDate"),
                             "valid_to": t.get("endDate"),
+                            # Operators put the fine print here — BKW notes a
+                            # yearly cap ("Deckelung in CHF/a: 24") on levies
+                            # it publishes as an implausible per-kWh figure.
+                            "comment": m.get("municipalityComment") or None,
                         }
 
             # A municipality that has nothing but a secondary-meter levy

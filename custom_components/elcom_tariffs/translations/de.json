@@ -49,10 +49,17 @@
       "init": {
         "title": "Strompreis-Einstellungen",
         "data": {
+          "municipality": "Gemeinde",
+          "energy_product": "Energie-Tarifprodukt",
+          "grid_product": "Netz-Tarifprodukt",
           "national_levies_rp": "Nationale Stromabgaben (Rp/kWh)",
           "vat_percent": "MWST-Satz (%)"
-        }
+        },
+        "description": "Nationale Abgaben und MWST-Satz gelten für die kombinierten Preis-Sensoren. Bei einem Eintrag auf Basis der Tarifdatei von {operator} können Gemeinde sowie Energie- und Netz-Tarifprodukt hier aus der heutigen Datei neu gewählt werden: Betreiber benennen Produkte um oder bauen ihre Datei von einem Jahr zum nächsten um, und die kombinierten Preis-Sensoren bleiben so lange nicht verfügbar, bis die aktuellen Namen gewählt sind. Eine Änderung lädt den Eintrag neu; Entitäts-IDs und Verlauf bleiben erhalten."
       }
+    },
+    "error": {
+      "already_configured": "Ein anderer Eintrag verwendet diese Gemeinde und diese Tarifprodukte bereits."
     }
   },
   "issues": {

@@ -110,7 +110,8 @@ async def async_setup_entry(
         ElcomDiagnosticYearSensor(hass, coordinator, entry, prefix),
         ElcomDiagnosticLastCheckedSensor(hass, coordinator, entry, prefix),
     ]
-    if entry.data.get(CONF_MUNICIPALITY) and entry.data.get(CONF_ENERGY_PRODUCT) and entry.data.get(CONF_GRID_PRODUCT):
+    # The municipality may be empty (operator file without a municipality section).
+    if entry.data.get(CONF_ENERGY_PRODUCT) and entry.data.get(CONF_GRID_PRODUCT):
         entities.append(ElcomTariffStatusSensor(hass, coordinator, entry, prefix))
         entities.append(ElcomPriceCurrentSensor(hass, coordinator, entry, prefix))
         entities.append(ElcomPriceLevelSensor(hass, coordinator, entry, "high", prefix))
@@ -599,15 +600,24 @@ class ElcomMunicipalityLevySensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
             "base_price_chf_month": d.get("base_price_chf"),
             "valid_from": d.get("valid_from"),
             "valid_to": d.get("valid_to"),
+            "comment": d.get("comment"),
         }
 
 
 def _calculation_components(coordinator: ElcomTariffCoordinator, entry: ConfigEntry) -> dict | None:
     data = coordinator.data or {}
-    municipality = entry.data[CONF_MUNICIPALITY]
+    municipality = entry.data.get(CONF_MUNICIPALITY, "")
     energy = data.get("energy", {}).get(entry.data[CONF_ENERGY_PRODUCT])
     grid = data.get("grid", {}).get(entry.data[CONF_GRID_PRODUCT])
-    municipality_data = data.get("municipalities", {}).get(municipality)
+    municipalities = data.get("municipalities", {})
+    if municipalities:
+        # The chosen municipality vanished from the file: unavailable, not a price without its levy.
+        municipality_data = municipalities.get(municipality)
+    else:
+        # The file carries no municipality section at all (some operators
+        # publish none, others drop it from one year to the next): no
+        # municipal levy is added.
+        municipality_data = {"rp_kwh": 0.0}
     if not energy or not grid or not municipality_data:
         return None
     return {"energy": energy, "grid": grid, "municipality": municipality_data}
@@ -679,7 +689,7 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         final_rp = subtotal_rp * (1 + vat / 100)
         energy_product = self._entry.data[CONF_ENERGY_PRODUCT]
         grid_product = self._entry.data[CONF_GRID_PRODUCT]
-        municipality = self._entry.data[CONF_MUNICIPALITY]
+        municipality = self._entry.data.get(CONF_MUNICIPALITY, "")
         calculation = t(
             "calculation_formula",
             self._hass_ref,
@@ -787,7 +797,7 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
         final_rp = subtotal_rp * (1 + vat / 100)
         energy_product = self._entry.data[CONF_ENERGY_PRODUCT]
         grid_product = self._entry.data[CONF_GRID_PRODUCT]
-        municipality = self._entry.data[CONF_MUNICIPALITY]
+        municipality = self._entry.data.get(CONF_MUNICIPALITY, "")
         calculation = t(
             "calculation_formula",
             self._hass_ref,

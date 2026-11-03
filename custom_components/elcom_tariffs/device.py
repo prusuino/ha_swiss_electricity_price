@@ -16,6 +16,9 @@ def device_info(hass: HomeAssistant, entry: ConfigEntry) -> DeviceInfo:
     energy_product = entry.data.get(CONF_ENERGY_PRODUCT)
     if municipality and energy_product:
         name = t("device_name", hass, operator=operator, municipality=municipality, energy_product=energy_product)
+    elif energy_product:
+        # Operator file without a municipality section.
+        name = t("device_name_no_municipality", hass, operator=operator, energy_product=energy_product)
     else:
         name = t("device_name_manual", hass, operator=operator)
     return DeviceInfo(

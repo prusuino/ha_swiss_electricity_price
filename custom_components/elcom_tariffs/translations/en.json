@@ -49,10 +49,17 @@
       "init": {
         "title": "Electricity Price Settings",
         "data": {
+          "municipality": "Municipality",
+          "energy_product": "Energy tariff product",
+          "grid_product": "Grid tariff product",
           "national_levies_rp": "National electricity levies (Rp/kWh)",
           "vat_percent": "VAT rate (%)"
-        }
+        },
+        "description": "National levies and VAT rate apply to the combined price sensors. For an entry based on the tariff file of {operator}, the municipality and the energy and grid tariff product can be re-selected here from the file as it is today: operators rename products or restructure their file from one year to the next, and the combined price sensors stay unavailable until the current names are chosen. Changing them reloads the entry; entity ids and history are kept."
       }
+    },
+    "error": {
+      "already_configured": "Another entry already uses this municipality and these tariff products."
     }
   },
   "issues": {

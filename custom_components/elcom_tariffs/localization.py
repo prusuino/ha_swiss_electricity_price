@@ -24,6 +24,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "fr": "Prix de l'électricité {operator} ({municipality}, {energy_product})",
         "it": "Prezzi elettricità {operator} ({municipality}, {energy_product})",
     },
+    "device_name_no_municipality": {
+        "de": "{operator} Strompreise ({energy_product})",
+        "en": "{operator} Electricity Prices ({energy_product})",
+        "fr": "Prix de l'électricité {operator} ({energy_product})",
+        "it": "Prezzi elettricità {operator} ({energy_product})",
+    },
     "device_name_manual": {
         "de": "{operator} Strompreise (manuell)",
         "en": "{operator} Electricity Prices (manual)",

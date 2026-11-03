@@ -49,10 +49,17 @@
       "init": {
         "title": "Paramètres du prix de l'électricité",
         "data": {
+          "municipality": "Commune",
+          "energy_product": "Produit tarifaire énergie",
+          "grid_product": "Produit tarifaire réseau",
           "national_levies_rp": "Redevances nationales sur l'électricité (Rp/kWh)",
           "vat_percent": "Taux de TVA (%)"
-        }
+        },
+        "description": "Les redevances nationales et le taux de TVA s'appliquent aux capteurs de prix combinés. Pour une entrée basée sur le fichier tarifaire de {operator}, la commune ainsi que les produits tarifaires énergie et réseau peuvent être choisis à nouveau ici dans le fichier actuel : les opérateurs renomment leurs produits ou restructurent leur fichier d'une année à l'autre, et les capteurs de prix combinés restent indisponibles jusqu'à ce que les noms actuels soient choisis. Une modification recharge l'entrée ; les identifiants d'entités et l'historique sont conservés."
       }
+    },
+    "error": {
+      "already_configured": "Une autre entrée utilise déjà cette commune et ces produits tarifaires."
     }
   },
   "issues": {

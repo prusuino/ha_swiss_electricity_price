@@ -135,9 +135,13 @@ The integration is listed in the HACS default store, so no custom repository is 
 2. Search for **"Swiss Electricity Price (ElCom)"**.
 3. Search for and choose your **grid operator**. Operators marked "direct link" are far more likely to work; operators marked "auto-detect" may fail. To refine the search, just change the search text and submit again.
 4. If your operator's link still doesn't work, select it anyway and paste the actual tariff file URL into **Manual tariff file URL** — find it on the operator's own website (it's a JSON file, usually linked from a "tariffs" or "Strompreise" page). This is the recommended fix when ElCom's own registry entry for your operator is stale or broken, which happens for a meaningful share of Swiss operators.
-5. Choose your **municipality**, then your **energy tariff product** and **grid tariff product**, populated live from the selected operator's own tariff file — picked separately since operators don't always name or categorize their energy and grid products the same way, so pairing them automatically isn't reliable.
+5. Choose your **municipality**, then your **energy tariff product** and **grid tariff product**, populated live from the selected operator's own tariff file — picked separately since operators don't always name or categorize their energy and grid products the same way, so pairing them automatically isn't reliable. If the operator's file has no municipality section, the municipality step is skipped and no municipal levy is added.
 6. Say whether the operator's **grid tariff already includes the federal levies** (ticked by default) — see the next section for how to tell.
 7. Done — all tariff, base-fee, municipality, diagnostic, and metering-fee sensors appear immediately. National levies and VAT can be adjusted afterwards via the integration's **Configure** dialog.
+
+### Operator renamed its products? Re-select them in Configure
+
+Operators rename their tariff products or restructure their file from one year to the next (one prefixed every product name with its own abbreviation and dropped the municipality section in November 2026). The sensors of the renamed products appear automatically under their new names, but the combined price sensors, the tariff level and the high-tariff binary sensor are tied to the names chosen at setup and report `unavailable` until the current names are chosen. Open the entry's **Configure** dialog: the municipality and the energy and grid tariff product are listed from the operator's file as it is today. Changing them reloads the entry; entity ids, renames and history are kept. The base fee sensor of a newly chosen product may have been created disabled earlier — enable it in its entity settings if you need it.
 
 ### National levies: included in the grid tariff or not?
 
