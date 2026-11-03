@@ -8,7 +8,7 @@ from homeassistant.helpers import issue_registry as ir
 from .const import CONF_ENERGY_PRODUCT, CONF_GRID_PRODUCT, CONF_MANUAL_HIGH_RP, DOMAIN
 from .coordinator import ElcomManualTariffCoordinator, ElcomTariffCoordinator, manual_issue_id
 
-PLATFORMS = ["sensor", "number"]
+PLATFORMS = ["sensor", "binary_sensor", "number"]
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

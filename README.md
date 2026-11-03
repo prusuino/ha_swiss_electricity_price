@@ -23,8 +23,9 @@ All entities are created dynamically from the selected operator's own live JSON 
 | `..._energy_<product>_base_fee` / `..._grid_<product>_base_fee` | Monthly base fee of the product (CHF/month, or the unit the operator's file names). Only created for products with a base price above 0. Only the energy and grid product chosen at setup are enabled; the others are created disabled and can be enabled in their entity settings. |
 | `sensor.elcom_<operator>_<id>_metering_<type>` | Metering fees (CHF/month, flat rate), if published. |
 | `sensor.elcom_<operator>_<id>_municipality_levy_<municipality>` | Municipal surcharge (Rp/kWh) for each municipality the operator serves. Only the municipality chosen at setup is enabled; the others are created disabled and can be enabled in their entity settings (all are enabled for an entry without a municipality). |
-| `sensor.elcom_<operator>_<id>_tariff_level` | Whether **your configured energy tariff** is currently on high or low tariff. |
-| `sensor.elcom_<operator>_<id>_price_current` | Combined current price for your configured municipality + energy/grid tariff products, including national levies and VAT, at the rates active right now. Attribute `calculation` spells out the full calculation in plain text. |
+| `sensor.elcom_<operator>_<id>_tariff_level` | Whether **your configured energy tariff** is currently on high or low tariff. Attributes `next_change` and `next_level` tell when the level changes next and to what. |
+| `binary_sensor.elcom_<operator>_<id>_high_tariff` | On while your configured energy tariff is on its high rate — the handier form of the tariff-level sensor for automation conditions and conditional cards. Only created for tariffs with more than one level. Same `next_change` / `next_level` attributes. |
+| `sensor.elcom_<operator>_<id>_price_current` | Combined current price for your configured municipality + energy/grid tariff products, including national levies and VAT, at the rates active right now. Attribute `calculation` spells out the full calculation in plain text. Attributes `raw_today` and `raw_tomorrow` hold the price for every hour of today and tomorrow (`start`, `end`, `value` in CHF/kWh), with `min_today`, `max_today`, `avg_today`, `price_next_hour`, and `next_change` / `next_price` / `next_level` for the next tariff switch — see [Dashboard examples](#dashboard-examples). |
 | `sensor.elcom_<operator>_<id>_price_high` / `_low` | Fixed combined high-tariff / low-tariff price (same formula, at the fixed rate instead of the currently active one). |
 | `sensor.elcom_<operator>_<id>_diagnostics_host` / `_path` / `_filename` | Where the operator's tariff file is currently being fetched from — split into host, directory, and file name so each fits the diagnostics card. The full URL and the ElCom-registered URL are available as attributes on the host sensor. |
 | `sensor.elcom_<operator>_<id>_diagnostics_year` | The validity year of the tariffs currently in use, read from their `startDate`. Only if the data carries no `startDate` does it fall back to a year found in the file name — operators often publish next year's tariffs months in advance, so the two can disagree. |
@@ -36,8 +37,9 @@ A manual-rate entry (see [If no link works at all](#if-no-link-works-at-all)) ha
 
 | Entity | Description |
 |---|---|
-| `sensor.elcom_<operator>_<id>_price_current` | Combined current price from the entered rates, including national levies and VAT — the high or low rate depending on the entered time window and weekdays, switching at the minute. |
-| `sensor.elcom_<operator>_<id>_tariff_level` | Whether the entered tariff is currently on high or low tariff. Only created when a low-tariff rate was entered. |
+| `sensor.elcom_<operator>_<id>_price_current` | Combined current price from the entered rates, including national levies and VAT — the high or low rate depending on the entered time window and weekdays, switching at the minute. Same price-curve and next-change attributes as the automatic entry (`raw_today`, `raw_tomorrow`, `min_today`, `max_today`, `avg_today`, `price_next_hour`, `next_change`, `next_price`, `next_level`). |
+| `sensor.elcom_<operator>_<id>_tariff_level` | Whether the entered tariff is currently on high or low tariff. Only created when a low-tariff rate was entered. Attributes `next_change` / `next_level`. |
+| `binary_sensor.elcom_<operator>_<id>_high_tariff` | On while the entered tariff is on its high rate. Only created when a low-tariff rate was entered. |
 | `sensor.elcom_<operator>_<id>_price_high` / `_low` | Fixed combined high-tariff / low-tariff price. Only created when a low-tariff rate was entered. |
 | `sensor.elcom_<operator>_<id>_base_fee` | The entered monthly base/grid fee (CHF/month). Only created when a fee was entered. |
 | `number.elcom_<operator>_<id>_national_levies` / `_vat_percent` | As above. |
@@ -49,6 +51,60 @@ Many operators keep more than one year's tariffs in one file — next year's set
 Data updates every 24 hours (tariffs only change once a year); the high/low switch itself does not wait for that — the active window is resolved against the clock whenever a sensor is read, and the sensors are refreshed at each window boundary. Products, metering fees and municipalities that appear in the operator's file later on are added automatically at the next update; an entity whose product has disappeared from the file reports `unavailable` and is kept rather than deleted, so it comes back on its own if the product does. Multiple instances are supported — add one per operator, municipality and tariff-product combination you want to track.
 
 Operators re-report to ElCom annually, and some leave an old file in place rather than replacing it in place for the new year — so on every update, the operator's current ElCom registration is re-checked (and the stored link corrected automatically if it changed), and the actual tariff-file link is freshly re-discovered rather than reused from a cached value, so a changed filename behind an unchanged page is picked up too. Should the link registered for the current year be unusable, the one the operator registered for next year is tried before giving up — from autumn on it is often the newer of the two. A registered address that redirects straight to the tariff file (rather than to a web page linking it) is recognised as such. A user-supplied manual URL override is never touched by any of this, since it was chosen specifically to bypass a broken registration.
+
+## Dashboard examples
+
+Swiss tariffs are time-of-use schedules, so the price for every hour of today and tomorrow is known in advance and published by the combined price sensor as `raw_today` / `raw_tomorrow`. Replace `<operator>_<id>` with your entry's prefix (see above).
+
+**Price curve, today and tomorrow** ([ApexCharts card](https://github.com/RomRider/apexcharts-card) from HACS):
+
+```yaml
+type: custom:apexcharts-card
+header:
+  show: true
+  title: Electricity price
+  show_states: true
+  colorize_states: true
+graph_span: 48h
+span:
+  start: day
+now:
+  show: true
+  label: Now
+yaxis:
+  - min: 0
+    decimals: 2
+series:
+  - entity: sensor.elcom_<operator>_<id>_price_current
+    name: CHF/kWh
+    type: column
+    float_precision: 4
+    data_generator: |
+      return [...entity.attributes.raw_today, ...entity.attributes.raw_tomorrow]
+        .map(s => [new Date(s.start).getTime(), s.value]);
+```
+
+**Countdown to the next tariff switch** (built-in Markdown card):
+
+```yaml
+type: markdown
+content: >-
+  {% set s = 'sensor.elcom_<operator>_<id>_price_current' %}
+  **{{ states(s) }} CHF/kWh** ({{ state_attr(s, 'tariff_level') }})
+  {% if state_attr(s, 'next_change') %}
+  — {{ state_attr(s, 'next_level') }} in {{ time_until(as_datetime(state_attr(s, 'next_change'))) }}
+  (from {{ as_datetime(state_attr(s, 'next_change')).strftime('%H:%M') }}): {{ state_attr(s, 'next_price') }} CHF/kWh
+  {% endif %}
+```
+
+**Run something only on low tariff** (automation condition):
+
+```yaml
+condition:
+  - condition: state
+    entity_id: binary_sensor.elcom_<operator>_<id>_high_tariff
+    state: "off"
+```
 
 ## Language
 

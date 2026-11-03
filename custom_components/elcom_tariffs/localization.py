@@ -132,6 +132,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "fr": "Redevance de base",
         "it": "Tassa di base",
     },
+    "high_tariff_name": {
+        "de": "Hochtarif aktiv",
+        "en": "High Tariff Active",
+        "fr": "Tarif haut actif",
+        "it": "Tariffa alta attiva",
+    },
     "weekday_mo": {"de": "Montag", "en": "Monday", "fr": "Lundi", "it": "Lunedì"},
     "weekday_tu": {"de": "Dienstag", "en": "Tuesday", "fr": "Mardi", "it": "Martedì"},
     "weekday_we": {"de": "Mittwoch", "en": "Wednesday", "fr": "Mercredi", "it": "Mercoledì"},

@@ -420,7 +420,11 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                 "from": w["from"],
                 "to": w["to"],
                 "from_min": _parse_hhmm(w["from"]),
-                "to_min": _parse_hhmm(w["to"]),
+                # Some operators (TBF, for one) close the last window of the
+                # day with "23:59" instead of "24:00"/"00:00", which would
+                # leave the minute 23:59–00:00 without any tariff: treated
+                # as end of day.
+                "to_min": _MINUTES_PER_DAY if _parse_hhmm(w["to"]) == _MINUTES_PER_DAY - 1 else _parse_hhmm(w["to"]),
                 "weekdays": w.get("weekdays") or None,
                 "months": w.get("months") or None,
                 "rp_kwh": round(w["price"] * 100, 3),

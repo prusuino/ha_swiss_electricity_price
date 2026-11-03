@@ -31,6 +31,14 @@ from .const import (
 from .coordinator import ElcomTariffCoordinator, current_rate
 from .device import device_info, entity_id_prefix
 from .localization import t, tariff_level_text
+from .price_schedule import (
+    combined_price_at,
+    level_at,
+    level_change_attributes,
+    localized,
+    manual_price_at,
+    schedule_attributes,
+)
 
 _YEAR_RE = re.compile(r"(20\d{2})")
 
@@ -500,6 +508,7 @@ class ElcomTariffStatusSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         return {
             "energy_product": self._entry.data[CONF_ENERGY_PRODUCT],
             "schedule": d.get("schedule"),
+            **localized(level_change_attributes(level_at(d), [d], dt_util.now()), self._hass_ref),
         }
 
 
@@ -700,6 +709,14 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
             "municipality": municipality,
             "energy_product": energy_product,
             "grid_product": grid_product,
+            **localized(
+                schedule_attributes(
+                    combined_price_at(c["energy"], c["grid"], municipality_rp, national_rp, vat),
+                    [c["energy"], c["grid"]],
+                    now,
+                ),
+                self._hass_ref,
+            ),
         }
 
 
@@ -840,7 +857,12 @@ class ElcomManualTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], Se
     @property
     def extra_state_attributes(self):
         d = self.coordinator.data or {}
-        return {"schedule": d.get("schedule")} if d else {}
+        if not d:
+            return {}
+        return {
+            "schedule": d.get("schedule"),
+            **localized(level_change_attributes(level_at(d), [d], dt_util.now()), self._hass_ref),
+        }
 
 
 class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
@@ -897,12 +919,17 @@ class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], S
             final_rp=final_rp,
             final_chf=final_rp / 100,
         )
+        data = self.coordinator.data or {}
         return {
             "calculation": calculation,
             "tariff_level": tariff_level_text(level, self._hass_ref),
             "tariff_rp_kwh": rp,
             "national_levies_rp_kwh": national_rp,
             "vat_percent": vat,
+            **localized(
+                schedule_attributes(manual_price_at(data, national_rp, vat), [data], dt_util.now()),
+                self._hass_ref,
+            ),
         }
 
 

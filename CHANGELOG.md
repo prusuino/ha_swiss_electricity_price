@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.0 — 2026-11-03
+
+- New: the combined price sensor (`sensor.elcom_<operator>_<id>_price_current`, automatic and manual entries alike) carries the **price curve** as attributes: `raw_today` and `raw_tomorrow` list the price for every hour of today and tomorrow (`start`, `end`, `value` in CHF/kWh — the shape chart cards already know from market-price integrations, so existing ApexCharts examples work as they are), plus `min_today`, `max_today`, `avg_today` and `price_next_hour`. Swiss tariffs are time-of-use schedules, so the whole curve is known in advance from the operator's file.
+- New: **next tariff change** on the combined price sensor (`next_change`, `next_price`, `next_level`) and on the tariff-level sensor (`next_change`, `next_level`), for countdown cards such as "Low tariff from 19:00". Weekday- and season-restricted windows are taken into account; a flat tariff reports no change.
+- New: `binary_sensor.elcom_<operator>_<id>_high_tariff` — on while the configured energy tariff is on its high rate. The tariff-level sensor shows the same as text; the binary sensor is the handier form for automation conditions and conditional cards. Created only for tariffs with more than one level, with the same `next_change` / `next_level` attributes.
+- Fixed: operators that close the last time window of the day with `23:59` instead of `24:00` (Technische Betriebe Flawil, for one) left the minute 23:59–00:00 without a tariff, so the combined price dropped to the levies alone for one minute every day. `23:59` is now treated as end of day.
+- README: dashboard examples (ApexCharts price curve, countdown card, automation condition).
+- Existing entities and their ids are unchanged; the attributes are refreshed at every tariff switch and at midnight, as before, so there is no additional load.
+
 ## 1.5.3 — 2026-11-03
 
 - New: a **base fee sensor** for every energy and grid product that carries a monthly base price (`sensor.elcom_<operator>_<id>_grid_<product>_base_fee`, likewise for `energy`; CHF/month, or the unit the operator's file names). The base price used to be available only as an attribute of the product's rate sensor, while the metering fee had a sensor of its own. Only the sensors of the energy and grid product chosen at setup start enabled; those of the operator's other products are created disabled and can be enabled in their entity settings, like the municipality levies since 1.5.1. Products with a base price of 0 get no sensor. (#7, requested by @kunoGit)
