@@ -1,0 +1,58 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1280px; height:320px; overflow:hidden;
+    font-family:"Liberation Sans", Arial, sans-serif;
+    background:
+      radial-gradient(760px 520px at 92% -25%, rgba(218,41,28,.42), transparent 60%),
+      radial-gradient(700px 500px at -5% 125%, rgba(30,58,110,.45), transparent 60%),
+      #0B0D12;
+    display:flex; align-items:center; }
+  .left { margin-left:72px; width:560px; flex:none; }
+  .brand { display:flex; align-items:center; margin-bottom:16px; }
+  .cross { width:38px; height:38px; background:#DA291C; border-radius:8px; position:relative; margin-right:16px; }
+  .cross::before { content:""; position:absolute; left:15.5px; top:8px; width:7px; height:22px; background:#fff; }
+  .cross::after  { content:""; position:absolute; top:15.5px; left:8px; width:22px; height:7px; background:#fff; }
+  .eyebrow { color:#E8A7A2; font-weight:bold; font-size:17px; letter-spacing:3px; }
+  h1 { color:#fff; font-size:54px; font-weight:bold; letter-spacing:-1px; margin-bottom:14px; white-space:nowrap; }
+  .sub { color:#C9CFDA; font-size:20px; line-height:1.4; max-width:520px; }
+
+  .card { width:520px; margin-left:46px; background:#151A23; border:1px solid #2A3140; border-radius:16px;
+    padding:18px 22px 16px; box-shadow:0 18px 50px rgba(0,0,0,.55); color:#E6EAF2; }
+  .card .top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .card .title { font-size:15px; color:#9AA3B5; letter-spacing:1px; text-transform:uppercase; }
+  .card .level { font-size:13px; font-weight:bold; color:#fff; background:#DA291C; border-radius:999px; padding:4px 10px; }
+  .card .price { font-size:44px; font-weight:bold; color:#fff; letter-spacing:-1px; line-height:1.05; }
+  .card .price small { font-size:18px; color:#9AA3B5; font-weight:normal; letter-spacing:0; margin-left:6px; }
+  .card .next { font-size:14px; color:#C9CFDA; margin:6px 0 12px; }
+  .card .next b { color:#fff; }
+  .chart { display:flex; align-items:flex-end; gap:4px; height:78px; padding-top:6px; border-top:1px solid #2A3140; }
+  .chart .b { flex:1; border-radius:3px 3px 0 0; background:#3A4356; }
+  .chart .b.hi { background:#DA291C; }
+  .chart .b.now { background:#fff; }
+  .axis { display:flex; justify-content:space-between; font-size:11px; color:#6F7A8E; margin-top:6px; }
+</style></head>
+<body>
+  <div class="left">
+    <div class="brand"><div class="cross"></div><div class="eyebrow">HOME ASSISTANT CUSTOM INTEGRATION</div></div>
+    <h1>Swiss Electricity Price</h1>
+    <div class="sub">Your grid operator's official tariffs: current price, high/low tariff and the hourly curve, for any operator in Switzerland.</div>
+  </div>
+  <div class="card">
+    <div class="top"><span class="title">Current electricity price</span><span class="level">High tariff</span></div>
+    <div class="price">0.2958<small>CHF/kWh</small></div>
+    <div class="next">Low tariff from <b>19:00</b> · 0.2396 CHF/kWh · min today 0.2396 · max 0.2958</div>
+    <div class="chart">
+      <div class="b" style="height:62%"></div><div class="b" style="height:62%"></div><div class="b" style="height:62%"></div>
+      <div class="b" style="height:62%"></div><div class="b" style="height:62%"></div><div class="b" style="height:62%"></div>
+      <div class="b" style="height:62%"></div>
+      <div class="b hi" style="height:100%"></div><div class="b hi" style="height:100%"></div><div class="b hi" style="height:100%"></div>
+      <div class="b now" style="height:100%"></div>
+      <div class="b hi" style="height:100%"></div><div class="b hi" style="height:100%"></div><div class="b hi" style="height:100%"></div>
+      <div class="b hi" style="height:100%"></div><div class="b hi" style="height:100%"></div><div class="b hi" style="height:100%"></div>
+      <div class="b hi" style="height:100%"></div><div class="b hi" style="height:100%"></div>
+      <div class="b" style="height:62%"></div><div class="b" style="height:62%"></div><div class="b" style="height:62%"></div>
+      <div class="b" style="height:62%"></div><div class="b" style="height:62%"></div>
+    </div>
+    <div class="axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+  </div>
+</body></html>

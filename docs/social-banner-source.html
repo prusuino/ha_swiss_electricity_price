@@ -1,0 +1,32 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1280px; height:640px; overflow:hidden;
+    font-family:"Liberation Sans", Arial, sans-serif;
+    background:
+      radial-gradient(900px 700px at 88% -10%, rgba(218,41,28,.45), transparent 60%),
+      radial-gradient(900px 700px at 0% 115%, rgba(30,58,110,.5), transparent 60%),
+      #0B0D12;
+    display:flex; align-items:center; }
+  .icon { width:340px; height:340px; margin-left:84px; flex:none; border-radius:72px;
+    filter: drop-shadow(0 24px 60px rgba(0,0,0,.65)); }
+  .text { margin-left:64px; width:740px; }
+  .brand { display:flex; align-items:center; margin-bottom:18px; }
+  .cross { width:40px; height:40px; background:#DA291C; border-radius:8px; position:relative; margin-right:16px; }
+  .cross::before { content:""; position:absolute; left:16.5px; top:8px; width:7px; height:24px; background:#fff; }
+  .cross::after  { content:""; position:absolute; top:16.5px; left:8px; width:24px; height:7px; background:#fff; }
+  .eyebrow { color:#E8A7A2; font-weight:bold; font-size:22px; letter-spacing:3px; }
+  h1 { color:#fff; white-space:nowrap; font-size:64px; font-weight:bold; letter-spacing:-1px; margin-bottom:16px; }
+  .sub { color:#C9CFDA; font-size:26px; line-height:1.35; max-width:700px; margin-bottom:30px; }
+  .pills { display:flex; gap:12px; flex-wrap:wrap; }
+  .pill { color:#fff; font-size:19px; font-weight:bold; border:2px solid #DA291C; border-radius:999px; padding:9px 18px; }
+  .pill.ghost { border-color:#3A4356; color:#C9CFDA; font-weight:normal; }
+</style></head>
+<body>
+  <img class="icon" src="../custom_components/elcom_tariffs/brand/icon@2x.png" alt="">
+  <div class="text">
+    <div class="brand"><div class="cross"></div><div class="eyebrow">HOME ASSISTANT CUSTOM INTEGRATION</div></div>
+    <h1>Swiss Electricity Price</h1>
+    <div class="sub">Official tariffs of any Swiss grid operator: current price, high/low tariff, hourly curve and the next tariff change, straight from ElCom's machine-readable data.</div>
+    <div class="pills"><span class="pill">Any grid operator</span><span class="pill">High / low tariff</span><span class="pill ghost">HACS default store</span></div>
+  </div>
+</body></html>
