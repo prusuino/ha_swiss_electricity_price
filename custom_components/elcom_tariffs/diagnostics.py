@@ -2,7 +2,10 @@
 Download diagnostics): what the entry is configured with and what was
 parsed from the operator's file, so an issue report can carry the facts
 instead of a description of them. The file contents themselves are not
-stored by the coordinator; the resolved URL is, and the file is public."""
+stored by the coordinator; the resolved URL is, and the file is public.
+
+The entry title and unique id are redacted. The municipality stays in the
+entry data: the levy and the product selection cannot be checked without it."""
 from __future__ import annotations
 
 from typing import Any
@@ -37,9 +40,9 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     return {
         "integration": USER_AGENT,
         "entry": {
-            "title": entry.title,
+            "title": "**REDACTED**",
             "version": entry.version,
-            "unique_id": entry.unique_id,
+            "unique_id": "**REDACTED**" if entry.unique_id else None,
             "data": dict(entry.data),
             "options": dict(entry.options),
         },

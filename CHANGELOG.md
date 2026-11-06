@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.1 — 2026-11-06
+
+- **Changed: the diagnostics download no longer contains the entry's title and unique id.** The municipality stays in the entry data, because a tariff problem cannot be checked without it; the README says so.
+
 ## 1.8.0 — 2026-11-06
 
 - **New: actions with response data.** `elcom_tariffs.get_price` returns the price in force at any moment (now by default) with its tariff level, how long it stays and the price that follows; `elcom_tariffs.get_price_schedule` returns the hourly price curve of a period (from the current hour to the end of tomorrow by default, up to 14 days) with minimum, maximum and average and, on request, the N cheapest hours — for shifting a load into them from a script, an automation or an Assist LLM. Both take the tariff entry as a field and work for automatic and manual entries alike; readable errors for an unknown or unloaded entry, a missing tariff selection and an invalid period. Field names and descriptions in all four languages; the README has an example with `response_variable`.
