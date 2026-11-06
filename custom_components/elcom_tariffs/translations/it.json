@@ -71,5 +71,60 @@
       "title": "{operator}: prodotto tariffario o comune scelti non più presenti nel file tariffario",
       "description": "Il file tariffario di {operator} non contiene più: {missing}. L'operatore lo ha rinominato o rimosso, quindi i sensori di prezzo combinati, il livello tariffario e il sensore di tariffa alta di questa voce non sono disponibili. Apri il dialogo «Configura» della voce e scegli i nomi attuali dall'elenco; la voce viene ricaricata e mantiene ID delle entità e cronologia."
     }
+  },
+  "services": {
+    "get_price": {
+      "name": "Ottieni prezzo",
+      "description": "Restituisce il prezzo dell'elettricità in vigore in un dato momento (ora per impostazione predefinita) con il livello tariffario, la validità e il prezzo successivo.",
+      "fields": {
+        "config_entry": {
+          "name": "Tariffa",
+          "description": "La voce Swiss Electricity Price (gestore di rete e scelta della tariffa) da valutare."
+        },
+        "datetime": {
+          "name": "Momento",
+          "description": "Il momento da valutare; vuoto per adesso."
+        }
+      }
+    },
+    "get_price_schedule": {
+      "name": "Ottieni andamento prezzi",
+      "description": "Restituisce la curva oraria dei prezzi di un periodo (dall'ora corrente alla fine di domani per impostazione predefinita), minimo, massimo e media e, a scelta, le ore più economiche.",
+      "fields": {
+        "config_entry": {
+          "name": "Tariffa",
+          "description": "La voce Swiss Electricity Price (gestore di rete e scelta della tariffa) da valutare."
+        },
+        "start": {
+          "name": "Inizio",
+          "description": "Inizio del periodo; vuoto per l'ora corrente."
+        },
+        "end": {
+          "name": "Fine",
+          "description": "Fine del periodo; vuoto per la fine di domani. Al massimo 14 giorni."
+        },
+        "cheapest_hours": {
+          "name": "Ore più economiche",
+          "description": "Restituisce anche le N ore più economiche del periodo, la più economica per prima."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "La voce tariffaria non esiste."
+    },
+    "entry_not_loaded": {
+      "message": "La voce tariffaria \"{title}\" non è caricata."
+    },
+    "no_price": {
+      "message": "\"{title}\" al momento non ha una selezione tariffaria valutabile (prodotti o comune mancanti nel file tariffario)."
+    },
+    "end_before_start": {
+      "message": "La fine deve essere successiva all'inizio."
+    },
+    "period_too_long": {
+      "message": "Il periodo può coprire al massimo 14 giorni."
+    }
   }
 }

@@ -71,5 +71,60 @@
       "title": "{operator}: chosen tariff product or municipality no longer in the tariff file",
       "description": "The tariff file of {operator} no longer contains: {missing}. The operator renamed or removed it, so the combined price sensors, the tariff level and the high-tariff sensor of this entry are unavailable. Open the entry's Configure dialog and choose the current names from the list; the entry reloads and keeps its entity ids and history."
     }
+  },
+  "services": {
+    "get_price": {
+      "name": "Get price",
+      "description": "Returns the electricity price in force at a moment (now by default) with its tariff level, how long it stays, and the price that follows.",
+      "fields": {
+        "config_entry": {
+          "name": "Tariff",
+          "description": "The Swiss Electricity Price entry (operator and tariff selection) to evaluate."
+        },
+        "datetime": {
+          "name": "Time",
+          "description": "The moment to evaluate; leave empty for now."
+        }
+      }
+    },
+    "get_price_schedule": {
+      "name": "Get price schedule",
+      "description": "Returns the hourly price curve of a period (from the current hour to the end of tomorrow by default), its minimum, maximum and average, and optionally the cheapest hours.",
+      "fields": {
+        "config_entry": {
+          "name": "Tariff",
+          "description": "The Swiss Electricity Price entry (operator and tariff selection) to evaluate."
+        },
+        "start": {
+          "name": "Start",
+          "description": "Start of the period; leave empty for the current hour."
+        },
+        "end": {
+          "name": "End",
+          "description": "End of the period; leave empty for the end of tomorrow. At most 14 days."
+        },
+        "cheapest_hours": {
+          "name": "Cheapest hours",
+          "description": "Also return the N cheapest hours of the period, cheapest first."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "The tariff entry does not exist."
+    },
+    "entry_not_loaded": {
+      "message": "The tariff entry \"{title}\" is not loaded."
+    },
+    "no_price": {
+      "message": "\"{title}\" has no usable tariff selection at the moment (products or municipality missing from the tariff file)."
+    },
+    "end_before_start": {
+      "message": "The end has to be after the start."
+    },
+    "period_too_long": {
+      "message": "The period may span at most 14 days."
+    }
   }
 }

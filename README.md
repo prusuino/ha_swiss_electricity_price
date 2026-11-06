@@ -56,6 +56,36 @@ Data updates every 24 hours (tariffs only change once a year); the high/low swit
 
 Operators re-report to ElCom annually, and some leave an old file in place rather than replacing it in place for the new year — so on every update, the operator's current ElCom registration is re-checked (and the stored link corrected automatically if it changed), and the actual tariff-file link is freshly re-discovered rather than reused from a cached value, so a changed filename behind an unchanged page is picked up too. Should the link registered for the current year be unusable, the one the operator registered for next year is tried before giving up — from autumn on it is often the newer of the two. A registered address that redirects straight to the tariff file (rather than to a web page linking it) is recognised as such. A user-supplied manual URL override is never touched by any of this, since it was chosen specifically to bypass a broken registration.
 
+## Actions (for scripts, automations and Assist)
+
+Two actions put the tariff schedule at the disposal of scripts, automations and Assist LLMs. Both take the tariff entry as a field and return response data; use `response_variable` to read it.
+
+| Action | Fields | Returns |
+|---|---|---|
+| `elcom_tariffs.get_price` | `config_entry` (the tariff entry), `datetime` (optional, default now) | `price_chf_kwh`, `tariff_level` / `tariff_level_key`, `at`, `valid_until` (the next price change), `next_price_chf_kwh`, `next_tariff_level` |
+| `elcom_tariffs.get_price_schedule` | `config_entry`, `start` and `end` (optional, default from the current hour to the end of tomorrow, at most 14 days), `cheapest_hours` (optional) | `slots` (one per clock hour: `start`, `end`, `value`, `tariff_level_key`), `min_chf_kwh`, `max_chf_kwh`, `avg_chf_kwh`, and `cheapest` (the N cheapest hours, cheapest first) when asked for |
+
+Swiss tariffs are time-of-use schedules, so the price at any future moment is known from the tariff file — the actions evaluate the same arithmetic as the combined-price sensors (energy and grid rate in force, municipal levy, national levies, VAT) at the moment you ask for. The shifted load example:
+
+```yaml
+script:
+  start_dishwasher_in_cheapest_hour:
+    sequence:
+      - action: elcom_tariffs.get_price_schedule
+        data:
+          config_entry: 01JXXXXXXXXXXXXXXXXXXXXXXX   # pick the entry in the UI editor
+          start: "{{ now().isoformat() }}"
+          end: "{{ (now() + timedelta(hours=12)).isoformat() }}"
+          cheapest_hours: 1
+        response_variable: schedule
+      - delay: "{{ (schedule.cheapest[0].start | as_datetime - now()).total_seconds() | int }}"
+      - action: switch.turn_on
+        target:
+          entity_id: switch.dishwasher
+```
+
+The `config_entry` field is picked from a list in the UI editor; in YAML it is the entry id shown in the entry's URL under **Settings → Devices & services**.
+
 ## Dashboard examples
 
 Swiss tariffs are time-of-use schedules, so the price for every hour of today and tomorrow is known in advance and published by the combined price sensor as `raw_today` / `raw_tomorrow`. Replace `<operator>_<id>` with your entry's prefix (see above).

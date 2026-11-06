@@ -71,5 +71,60 @@
       "title": "{operator} : produit tarifaire ou commune choisis absents du fichier tarifaire",
       "description": "Le fichier tarifaire de {operator} ne contient plus : {missing}. L'opérateur l'a renommé ou supprimé ; les capteurs de prix combinés, le niveau tarifaire et le capteur de tarif haut de cette entrée sont donc indisponibles. Ouvrez le dialogue « Configurer » de l'entrée et choisissez les noms actuels dans la liste ; l'entrée est rechargée et conserve ses identifiants d'entités et son historique."
     }
+  },
+  "services": {
+    "get_price": {
+      "name": "Obtenir le prix",
+      "description": "Renvoie le prix de l'électricité en vigueur à un moment donné (maintenant par défaut) avec son niveau tarifaire, sa durée de validité et le prix suivant.",
+      "fields": {
+        "config_entry": {
+          "name": "Tarif",
+          "description": "L'entrée Swiss Electricity Price (gestionnaire de réseau et choix du tarif) à évaluer."
+        },
+        "datetime": {
+          "name": "Moment",
+          "description": "Le moment à évaluer ; vide pour maintenant."
+        }
+      }
+    },
+    "get_price_schedule": {
+      "name": "Obtenir la courbe des prix",
+      "description": "Renvoie la courbe horaire des prix d'une période (de l'heure en cours à la fin de demain par défaut), son minimum, maximum et moyenne, et en option les heures les moins chères.",
+      "fields": {
+        "config_entry": {
+          "name": "Tarif",
+          "description": "L'entrée Swiss Electricity Price (gestionnaire de réseau et choix du tarif) à évaluer."
+        },
+        "start": {
+          "name": "Début",
+          "description": "Début de la période ; vide pour l'heure en cours."
+        },
+        "end": {
+          "name": "Fin",
+          "description": "Fin de la période ; vide pour la fin de demain. 14 jours au plus."
+        },
+        "cheapest_hours": {
+          "name": "Heures les moins chères",
+          "description": "Renvoie aussi les N heures les moins chères de la période, la moins chère en premier."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "L'entrée tarifaire n'existe pas."
+    },
+    "entry_not_loaded": {
+      "message": "L'entrée tarifaire « {title} » n'est pas chargée."
+    },
+    "no_price": {
+      "message": "« {title} » n'a pas de sélection tarifaire exploitable pour le moment (produits ou commune absents du fichier tarifaire)."
+    },
+    "end_before_start": {
+      "message": "La fin doit être postérieure au début."
+    },
+    "period_too_long": {
+      "message": "La période ne peut pas dépasser 14 jours."
+    }
   }
 }

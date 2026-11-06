@@ -3,12 +3,22 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_ENERGY_PRODUCT, CONF_GRID_PRODUCT, CONF_MANUAL_HIGH_RP, DOMAIN
 from .coordinator import ElcomManualTariffCoordinator, ElcomTariffCoordinator, manual_issue_id, selection_issue_id
+from .services import async_register_services
 
 PLATFORMS = ["sensor", "binary_sensor", "calendar", "number"]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the actions; they take the config entry as a field."""
+    async_register_services(hass)
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

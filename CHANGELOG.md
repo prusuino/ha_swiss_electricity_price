@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.0 — 2026-11-06
+
+- **New: actions with response data.** `elcom_tariffs.get_price` returns the price in force at any moment (now by default) with its tariff level, how long it stays and the price that follows; `elcom_tariffs.get_price_schedule` returns the hourly price curve of a period (from the current hour to the end of tomorrow by default, up to 14 days) with minimum, maximum and average and, on request, the N cheapest hours — for shifting a load into them from a script, an automation or an Assist LLM. Both take the tariff entry as a field and work for automatic and manual entries alike; readable errors for an unknown or unloaded entry, a missing tariff selection and an invalid period. Field names and descriptions in all four languages; the README has an example with `response_variable`.
+
 ## 1.7.0 — 2026-11-03
 
 - New: **tariff calendar** `calendar.elcom_<operator>_<id>_tariff` — every stretch of high or low tariff of the configured energy tariff as a calendar event, with the combined price as description. Swiss tariffs are time-of-use schedules, so the calendar is known for any date; it works with calendar triggers ("30 minutes before the next low-tariff stretch") and the calendar card. Created for tariffs with more than one level, automatic and manual entries alike.

@@ -71,5 +71,60 @@
       "title": "{operator}: gewähltes Tarifprodukt oder Gemeinde nicht mehr in der Tarifdatei",
       "description": "Die Tarifdatei von {operator} enthält nicht mehr: {missing}. Der Betreiber hat es umbenannt oder entfernt, darum sind die kombinierten Preis-Sensoren, die Tarifstufe und der Hochtarif-Sensor dieses Eintrags nicht verfügbar. Öffne den Dialog «Konfigurieren» des Eintrags und wähle die aktuellen Namen aus der Liste; der Eintrag wird neu geladen und behält Entitäts-IDs und Verlauf."
     }
+  },
+  "services": {
+    "get_price": {
+      "name": "Preis abrufen",
+      "description": "Liefert den Strompreis zu einem Zeitpunkt (standardmässig jetzt) mit Tarifstufe, Gültigkeit und dem Preis, der danach folgt.",
+      "fields": {
+        "config_entry": {
+          "name": "Tarif",
+          "description": "Der Swiss-Electricity-Price-Eintrag (Netzbetreiber und Tarifwahl), der ausgewertet wird."
+        },
+        "datetime": {
+          "name": "Zeitpunkt",
+          "description": "Der auszuwertende Zeitpunkt; leer für jetzt."
+        }
+      }
+    },
+    "get_price_schedule": {
+      "name": "Preisverlauf abrufen",
+      "description": "Liefert die stündliche Preiskurve eines Zeitraums (standardmässig ab der aktuellen Stunde bis Ende morgen), Minimum, Maximum und Mittelwert sowie optional die günstigsten Stunden.",
+      "fields": {
+        "config_entry": {
+          "name": "Tarif",
+          "description": "Der Swiss-Electricity-Price-Eintrag (Netzbetreiber und Tarifwahl), der ausgewertet wird."
+        },
+        "start": {
+          "name": "Beginn",
+          "description": "Beginn des Zeitraums; leer für die aktuelle Stunde."
+        },
+        "end": {
+          "name": "Ende",
+          "description": "Ende des Zeitraums; leer für das Ende des morgigen Tages. Höchstens 14 Tage."
+        },
+        "cheapest_hours": {
+          "name": "Günstigste Stunden",
+          "description": "Zusätzlich die N günstigsten Stunden des Zeitraums zurückgeben, günstigste zuerst."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "Der Tarifeintrag existiert nicht."
+    },
+    "entry_not_loaded": {
+      "message": "Der Tarifeintrag „{title}“ ist nicht geladen."
+    },
+    "no_price": {
+      "message": "„{title}“ hat zurzeit keine auswertbare Tarifwahl (Produkte oder Gemeinde fehlen in der Tarifdatei)."
+    },
+    "end_before_start": {
+      "message": "Das Ende muss nach dem Beginn liegen."
+    },
+    "period_too_long": {
+      "message": "Der Zeitraum darf höchstens 14 Tage umfassen."
+    }
   }
 }

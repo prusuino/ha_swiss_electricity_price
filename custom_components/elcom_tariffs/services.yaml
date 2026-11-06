@@ -1,0 +1,38 @@
+get_price:
+  fields:
+    config_entry:
+      required: true
+      selector:
+        config_entry:
+          integration: elcom_tariffs
+    datetime:
+      required: false
+      example: "2026-11-06 22:30:00"
+      selector:
+        datetime:
+
+get_price_schedule:
+  fields:
+    config_entry:
+      required: true
+      selector:
+        config_entry:
+          integration: elcom_tariffs
+    start:
+      required: false
+      example: "2026-11-06 00:00:00"
+      selector:
+        datetime:
+    end:
+      required: false
+      example: "2026-11-08 00:00:00"
+      selector:
+        datetime:
+    cheapest_hours:
+      required: false
+      example: 4
+      selector:
+        number:
+          min: 1
+          max: 48
+          mode: box
