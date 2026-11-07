@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.0 — 2026-11-07
+
+- **New: cantonal levies from the operator's file** (#8). The `cantonalTaxes` section of the tariff file is parsed; each entry gets a sensor `sensor.elcom_<operator>_<id>_cantonal_levy_<entry>` (Rp/kWh in force — Geneva's PCP has a high and a low rate — with canton, label and validity as attributes). Which entries belong on your bill, and which of those are billed **without VAT**, is chosen in a new setup step and in the Configure dialog; the chosen ones go into the combined price, the VAT-exempt ones after the VAT. Nothing is preselected, because operators fill this section very differently: a survey of all machine-readable files found cantonal taxes (VD, NE, JU, GE, ZH) but also the federal levies, municipal concession fees and lump sums under this heading — adding them unasked would double-count the federal levies for some users. A chosen entry that later disappears from the file is named in the repair issue, like a vanished product.
+- **New: `number.elcom_<operator>_<id>_vat_exempt_levies`** — an amount in Rp/kWh added to the combined price after VAT (default 0), for a cantonal tax such as Vaud's 0.6 Rp/kWh when the operator's file does not carry it. Also in the Configure dialog, and for manual entries.
+- The `calculation` attribute of the combined price sensors shows the cantonal and the VAT-exempt parts when they are not 0; the per-component attributes gain `cantonal_levies_rp_kwh`, `cantonal_levies_vat_exempt_rp_kwh`, `cantonal_levies`, `cantonal_levies_vat_exempt` and `vat_exempt_levies_rp_kwh`. The price curve, the next-period preview, the calendar and the actions use the same arithmetic (now in one place, `levies.py`).
+- The diagnostics download lists the parsed cantonal levies.
+- **Existing entries are unchanged**: no cantonal levy is added until one is chosen, the new number starts at 0, entity ids are kept. The user agent now carries the current version.
+
 ## 1.8.1 — 2026-11-06
 
 - **Changed: the diagnostics download no longer contains the entry's title and unique id.** The municipality stays in the entry data, because a tariff problem cannot be checked without it; the README says so.

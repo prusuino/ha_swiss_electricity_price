@@ -20,6 +20,14 @@
           "grid_includes_levies": "Grid tariff already includes the federal levies"
         }
       },
+      "cantonal": {
+        "title": "{operator}: cantonal levies",
+        "description": "The tariff file of {operator} lists {count} entries under cantonal levies. Tick the ones that appear on your bill — they are then added to the combined price — and, among those, the ones your bill shows without VAT (a cantonal tax such as Vaud's 0.6 Rp/kWh is billed without VAT; a cantonal fee with it). Nothing is preselected: operators put different things under this heading, some even the federal levies, which the previous step already covers — ticking those as well would count them twice. Both choices can be changed later in the Configure dialog; every entry also gets its own sensor.",
+        "data": {
+          "cantonal_levies": "Cantonal levies on my bill",
+          "cantonal_levies_vat_exempt": "Of these, billed without VAT"
+        }
+      },
       "manual": {
         "title": "{operator}",
         "description": "No usable tariff file could be found for {operator} — neither the registered link nor a URL you supplied worked (or it worked but had no usable data). Enter your known rates by hand instead; find them on your electricity bill or the operator's rate sheet.",
@@ -52,10 +60,13 @@
           "municipality": "Municipality",
           "energy_product": "Energy tariff product",
           "grid_product": "Grid tariff product",
+          "cantonal_levies": "Cantonal levies on my bill",
+          "cantonal_levies_vat_exempt": "Of these, billed without VAT",
           "national_levies_rp": "National electricity levies (Rp/kWh)",
-          "vat_percent": "VAT rate (%)"
+          "vat_percent": "VAT rate (%)",
+          "vat_exempt_levies_rp": "Levies exempt from VAT (Rp/kWh, added after VAT)"
         },
-        "description": "National levies and VAT rate apply to the combined price sensors. For an entry based on the tariff file of {operator}, the municipality and the energy and grid tariff product can be re-selected here from the file as it is today: operators rename products or restructure their file from one year to the next, and the combined price sensors stay unavailable until the current names are chosen. Changing them reloads the entry; entity ids and history are kept."
+        "description": "National levies, VAT rate and the amount exempt from VAT apply to the combined price sensors. For an entry based on the tariff file of {operator}, the municipality and the energy and grid tariff product can be re-selected here from the file as it is today: operators rename products or restructure their file from one year to the next, and the combined price sensors stay unavailable until the current names are chosen. If the file lists cantonal levies, tick the ones on your bill and, among those, the ones billed without VAT. Changing any of these reloads the entry; entity ids and history are kept."
       }
     },
     "error": {

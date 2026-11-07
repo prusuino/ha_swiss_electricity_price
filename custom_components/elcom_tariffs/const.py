@@ -16,7 +16,7 @@ UPDATE_INTERVAL_HOURS = 24
 # be fetched although it is valid and publicly reachable (#7). The
 # LINDAS directory queries keep the default user agent.
 USER_AGENT = (
-    "SwissElectricityPrice/1.7.0 "
+    "SwissElectricityPrice/1.9.0 "
     "(Home Assistant integration; +https://github.com/prusuino/ha_swiss_electricity_price)"
 )
 OPERATOR_REQUEST_HEADERS = {"User-Agent": USER_AGENT, "Accept": "application/json, */*;q=0.8"}
@@ -42,6 +42,16 @@ CONF_NATIONAL_LEVIES_RP = "national_levies_rp"
 # VSE tariff format prescribes) -> national levies start at 0 instead of the default.
 CONF_GRID_INCLUDES_LEVIES = "grid_includes_levies"
 CONF_VAT_PERCENT = "vat_percent"
+# Cantonal levies from the file's `cantonalTaxes` section that are part of
+# this entry's price (names as the parser builds them, see
+# coordinator.py), and the subset billed without VAT. Entry data, chosen
+# at setup and in the Configure dialog; absent on entries created before
+# 1.9.0, which therefore keep their price as it was.
+CONF_CANTONAL_LEVIES = "cantonal_levies"
+CONF_CANTONAL_LEVIES_VAT_EXEMPT = "cantonal_levies_vat_exempt"
+# An amount in Rp/kWh added after VAT (a cantonal tax the operator's
+# file does not carry); option, adjustable, default 0.
+CONF_VAT_EXEMPT_LEVIES_RP = "vat_exempt_levies_rp"
 # Start date (ISO) of the upcoming tariff period the user has already been
 # notified about, so the notification is sent once per period.
 CONF_NEXT_PERIOD_NOTIFIED = "next_period_notified"
@@ -68,3 +78,4 @@ DEFAULT_MANUAL_HIGH_WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr"]
 # the grid price does NOT include them, adjustable afterwards.
 DEFAULT_NATIONAL_LEVIES_RP = 3.03
 DEFAULT_VAT_PERCENT = 8.1
+DEFAULT_VAT_EXEMPT_LEVIES_RP = 0.0

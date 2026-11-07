@@ -1,4 +1,5 @@
-"""Directly adjustable values: national electricity levies and VAT rate."""
+"""Directly adjustable values: national electricity levies, VAT rate and
+the levy amount exempt from VAT."""
 from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
@@ -12,8 +13,10 @@ from .const import (
     CONF_MANUAL_HIGH_RP,
     CONF_MUNICIPALITY,
     CONF_NATIONAL_LEVIES_RP,
+    CONF_VAT_EXEMPT_LEVIES_RP,
     CONF_VAT_PERCENT,
     DEFAULT_NATIONAL_LEVIES_RP,
+    DEFAULT_VAT_EXEMPT_LEVIES_RP,
     DEFAULT_VAT_PERCENT,
 )
 from .device import device_info, entity_id_prefix
@@ -31,7 +34,13 @@ async def async_setup_entry(
     is_manual = CONF_MANUAL_HIGH_RP in entry.data
     if has_location or is_manual:
         prefix = entity_id_prefix(entry)
-        async_add_entities([NationalLeviesNumber(hass, entry, prefix), VatNumber(hass, entry, prefix)])
+        async_add_entities(
+            [
+                NationalLeviesNumber(hass, entry, prefix),
+                VatNumber(hass, entry, prefix),
+                VatExemptLeviesNumber(hass, entry, prefix),
+            ]
+        )
 
 
 class _OptionNumber(NumberEntity):
@@ -101,3 +110,24 @@ class VatNumber(_OptionNumber):
         self._attr_name = t("vat_name", hass)
         self._attr_unique_id = f"{entry.entry_id}_vat"
         self.entity_id = f"number.{prefix}_vat_percent"
+
+
+class VatExemptLeviesNumber(_OptionNumber):
+    """Levies exempt from VAT, in Rp/kWh, added to the price after VAT —
+    a cantonal tax the operator's file does not carry (Vaud's 0.6 Rp/kWh
+    renewable-energy tax, for one). 0 by default; the cantonal levies the
+    file does carry are chosen in the Configure dialog instead."""
+
+    _attr_native_unit_of_measurement = "Rp/kWh"
+    _attr_native_min_value = 0
+    _attr_native_max_value = 20
+    _attr_native_step = 0.001
+    _attr_icon = "mdi:bank-outline"
+    _option_key = CONF_VAT_EXEMPT_LEVIES_RP
+    _default = DEFAULT_VAT_EXEMPT_LEVIES_RP
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, prefix: str) -> None:
+        super().__init__(hass, entry)
+        self._attr_name = t("vat_exempt_levies_name", hass)
+        self._attr_unique_id = f"{entry.entry_id}_vat_exempt_levies"
+        self.entity_id = f"number.{prefix}_vat_exempt_levies"

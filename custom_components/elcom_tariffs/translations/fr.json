@@ -20,6 +20,14 @@
           "grid_includes_levies": "Le tarif réseau inclut déjà les redevances fédérales"
         }
       },
+      "cantonal": {
+        "title": "{operator} : taxes cantonales",
+        "description": "Le fichier tarifaire de {operator} contient {count} entrées sous taxes cantonales. Cochez celles qui figurent sur votre facture – elles sont alors ajoutées au prix combiné – et, parmi elles, celles que votre facture indique hors TVA (une taxe cantonale comme les 0.6 ct./kWh vaudois est facturée sans TVA, un émolument cantonal avec). Rien n'est présélectionné : les opérateurs placent des choses différentes sous ce titre, certains même les redevances fédérales, déjà couvertes par l'étape précédente – les cocher aussi les compterait deux fois. Les deux choix peuvent être modifiés plus tard dans le dialogue « Configurer » ; chaque entrée reçoit en outre son propre capteur.",
+        "data": {
+          "cantonal_levies": "Taxes cantonales sur ma facture",
+          "cantonal_levies_vat_exempt": "Parmi celles-ci, facturées hors TVA"
+        }
+      },
       "manual": {
         "title": "{operator}",
         "description": "Aucun fichier tarifaire utilisable n'a pu être trouvé pour {operator} — ni le lien enregistré ni une URL que vous avez fournie n'a fonctionné (ou il n'y avait pas de données utilisables dedans). Saisissez plutôt vos tarifs connus manuellement ; vous les trouverez sur votre facture d'électricité ou la grille tarifaire de l'opérateur.",
@@ -52,10 +60,13 @@
           "municipality": "Commune",
           "energy_product": "Produit tarifaire énergie",
           "grid_product": "Produit tarifaire réseau",
+          "cantonal_levies": "Taxes cantonales sur ma facture",
+          "cantonal_levies_vat_exempt": "Parmi celles-ci, facturées hors TVA",
           "national_levies_rp": "Redevances nationales sur l'électricité (Rp/kWh)",
-          "vat_percent": "Taux de TVA (%)"
+          "vat_percent": "Taux de TVA (%)",
+          "vat_exempt_levies_rp": "Taxes hors TVA (ct./kWh, ajoutées après la TVA)"
         },
-        "description": "Les redevances nationales et le taux de TVA s'appliquent aux capteurs de prix combinés. Pour une entrée basée sur le fichier tarifaire de {operator}, la commune ainsi que les produits tarifaires énergie et réseau peuvent être choisis à nouveau ici dans le fichier actuel : les opérateurs renomment leurs produits ou restructurent leur fichier d'une année à l'autre, et les capteurs de prix combinés restent indisponibles jusqu'à ce que les noms actuels soient choisis. Une modification recharge l'entrée ; les identifiants d'entités et l'historique sont conservés."
+        "description": "Les redevances nationales, le taux de TVA et le montant hors TVA s'appliquent aux capteurs de prix combinés. Pour une entrée basée sur le fichier tarifaire de {operator}, la commune ainsi que les produits tarifaires énergie et réseau peuvent être choisis à nouveau ici dans le fichier actuel : les opérateurs renomment leurs produits ou restructurent leur fichier d'une année à l'autre, et les capteurs de prix combinés restent indisponibles jusqu'à ce que les noms actuels soient choisis. Si le fichier contient des taxes cantonales, cochez celles de votre facture et, parmi elles, celles facturées hors TVA. Chacune de ces modifications recharge l'entrée ; les identifiants d'entités et l'historique sont conservés."
       }
     },
     "error": {

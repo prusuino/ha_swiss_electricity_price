@@ -20,6 +20,14 @@
           "grid_includes_levies": "Netztarif enthält die Bundesabgaben bereits"
         }
       },
+      "cantonal": {
+        "title": "{operator}: kantonale Abgaben",
+        "description": "Die Tarifdatei von {operator} führt {count} Einträge unter kantonalen Abgaben. Hake die an, die auf deiner Rechnung stehen – sie werden dem kombinierten Preis zugerechnet – und davon jene, die deine Rechnung ohne MWST ausweist (eine kantonale Steuer wie die 0.6 Rp/kWh im Kanton Waadt wird ohne MWST verrechnet, eine kantonale Gebühr mit). Nichts ist vorausgewählt: Betreiber legen unter diesem Titel Verschiedenes ab, manche sogar die Bundesabgaben, die der vorherige Schritt bereits abdeckt – diese zusätzlich anzuhaken würde sie doppelt zählen. Beide Auswahlen lassen sich später im Dialog «Konfigurieren» ändern; jeder Eintrag erhält zudem einen eigenen Sensor.",
+        "data": {
+          "cantonal_levies": "Kantonale Abgaben auf meiner Rechnung",
+          "cantonal_levies_vat_exempt": "Davon ohne MWST verrechnet"
+        }
+      },
       "manual": {
         "title": "{operator}",
         "description": "Für {operator} konnte keine nutzbare Tarifdatei gefunden werden — weder der registrierte Link noch eine von dir angegebene URL hat funktioniert (oder es gab keine brauchbaren Daten darin). Gib stattdessen deine bekannten Tarife von Hand ein; du findest sie auf deiner Stromrechnung oder im Preisblatt des Betreibers.",
@@ -52,10 +60,13 @@
           "municipality": "Gemeinde",
           "energy_product": "Energie-Tarifprodukt",
           "grid_product": "Netz-Tarifprodukt",
+          "cantonal_levies": "Kantonale Abgaben auf meiner Rechnung",
+          "cantonal_levies_vat_exempt": "Davon ohne MWST verrechnet",
           "national_levies_rp": "Nationale Stromabgaben (Rp/kWh)",
-          "vat_percent": "MWST-Satz (%)"
+          "vat_percent": "MWST-Satz (%)",
+          "vat_exempt_levies_rp": "Abgaben ohne MWST (Rp/kWh, nach der MWST addiert)"
         },
-        "description": "Nationale Abgaben und MWST-Satz gelten für die kombinierten Preis-Sensoren. Bei einem Eintrag auf Basis der Tarifdatei von {operator} können Gemeinde sowie Energie- und Netz-Tarifprodukt hier aus der heutigen Datei neu gewählt werden: Betreiber benennen Produkte um oder bauen ihre Datei von einem Jahr zum nächsten um, und die kombinierten Preis-Sensoren bleiben so lange nicht verfügbar, bis die aktuellen Namen gewählt sind. Eine Änderung lädt den Eintrag neu; Entitäts-IDs und Verlauf bleiben erhalten."
+        "description": "Nationale Abgaben, MWST-Satz und der Betrag ohne MWST gelten für die kombinierten Preis-Sensoren. Bei einem Eintrag auf Basis der Tarifdatei von {operator} können Gemeinde sowie Energie- und Netz-Tarifprodukt hier aus der heutigen Datei neu gewählt werden: Betreiber benennen Produkte um oder bauen ihre Datei von einem Jahr zum nächsten um, und die kombinierten Preis-Sensoren bleiben so lange nicht verfügbar, bis die aktuellen Namen gewählt sind. Führt die Datei kantonale Abgaben, hake die auf deiner Rechnung an und davon jene ohne MWST. Jede dieser Änderungen lädt den Eintrag neu; Entitäts-IDs und Verlauf bleiben erhalten."
       }
     },
     "error": {

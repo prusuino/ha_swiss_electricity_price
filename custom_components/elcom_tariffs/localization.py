@@ -132,6 +132,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "fr": "Taux de TVA",
         "it": "Aliquota IVA",
     },
+    "vat_exempt_levies_name": {
+        "de": "Abgaben ohne MWST",
+        "en": "Levies Exempt from VAT",
+        "fr": "Taxes hors TVA",
+        "it": "Tasse esenti da IVA",
+    },
+    "cantonal_levy_prefix": {
+        "de": "Kantonale Abgabe",
+        "en": "Cantonal Levy",
+        "fr": "Taxe cantonale",
+        "it": "Tassa cantonale",
+    },
     "grid_fee_name": {
         "de": "Grundgebühr",
         "en": "Base Fee",
@@ -207,51 +219,66 @@ STRINGS: dict[str, dict[str, str]] = {
         "fr": " (détection automatique, incertaine)",
         "it": " (rilevamento automatico, incerto)",
     },
+    # {cantonal_part} and {exempt_part} are empty unless the entry has
+    # cantonal levies / an amount exempt from VAT (see sensor.py), so the
+    # text of an entry without them reads as it always did.
     "calculation_formula": {
         "de": (
             "{energy_rp:.2f} Rp Energie ({energy_product}) + {grid_rp:.2f} Rp Netz ({grid_product}) "
-            "+ {municipality_rp:.2f} Rp Gemeindeabgabe ({municipality}) + {national_rp:.2f} Rp nationale Abgaben "
-            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% MWST) "
+            "+ {municipality_rp:.2f} Rp Gemeindeabgabe ({municipality}) + {national_rp:.2f} Rp nationale Abgaben{cantonal_part} "
+            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% MWST){exempt_part} "
             "= {final_rp:.2f} Rp/kWh = {final_chf:.4f} CHF/kWh"
         ),
         "en": (
             "{energy_rp:.2f} Rp energy ({energy_product}) + {grid_rp:.2f} Rp grid ({grid_product}) "
-            "+ {municipality_rp:.2f} Rp municipality levy ({municipality}) + {national_rp:.2f} Rp national levies "
-            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% VAT) "
+            "+ {municipality_rp:.2f} Rp municipality levy ({municipality}) + {national_rp:.2f} Rp national levies{cantonal_part} "
+            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% VAT){exempt_part} "
             "= {final_rp:.2f} Rp/kWh = {final_chf:.4f} CHF/kWh"
         ),
         "fr": (
             "{energy_rp:.2f} Rp énergie ({energy_product}) + {grid_rp:.2f} Rp réseau ({grid_product}) "
-            "+ {municipality_rp:.2f} Rp taxe communale ({municipality}) + {national_rp:.2f} Rp redevances nationales "
-            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% TVA) "
+            "+ {municipality_rp:.2f} Rp taxe communale ({municipality}) + {national_rp:.2f} Rp redevances nationales{cantonal_part} "
+            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% TVA){exempt_part} "
             "= {final_rp:.2f} Rp/kWh = {final_chf:.4f} CHF/kWh"
         ),
         "it": (
             "{energy_rp:.2f} Rp energia ({energy_product}) + {grid_rp:.2f} Rp rete ({grid_product}) "
-            "+ {municipality_rp:.2f} Rp tassa comunale ({municipality}) + {national_rp:.2f} Rp oneri nazionali "
-            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% IVA) "
+            "+ {municipality_rp:.2f} Rp tassa comunale ({municipality}) + {national_rp:.2f} Rp oneri nazionali{cantonal_part} "
+            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% IVA){exempt_part} "
             "= {final_rp:.2f} Rp/kWh = {final_chf:.4f} CHF/kWh"
         ),
+    },
+    "calculation_cantonal_part": {
+        "de": " + {cantonal_rp:.3f} Rp kantonale Abgaben",
+        "en": " + {cantonal_rp:.3f} Rp cantonal levies",
+        "fr": " + {cantonal_rp:.3f} Rp taxes cantonales",
+        "it": " + {cantonal_rp:.3f} Rp tasse cantonali",
+    },
+    "calculation_exempt_part": {
+        "de": " = {taxed_rp:.3f} Rp + {exempt_rp:.3f} Rp Abgaben ohne MWST",
+        "en": " = {taxed_rp:.3f} Rp + {exempt_rp:.3f} Rp levies exempt from VAT",
+        "fr": " = {taxed_rp:.3f} Rp + {exempt_rp:.3f} Rp taxes hors TVA",
+        "it": " = {taxed_rp:.3f} Rp + {exempt_rp:.3f} Rp tasse esenti da IVA",
     },
     "calculation_formula_manual": {
         "de": (
             "{tariff_rp:.2f} Rp manuell eingegebener Tarif + {national_rp:.2f} Rp nationale Abgaben "
-            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% MWST) "
+            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% MWST){exempt_part} "
             "= {final_rp:.2f} Rp/kWh = {final_chf:.4f} CHF/kWh"
         ),
         "en": (
             "{tariff_rp:.2f} Rp manually entered tariff + {national_rp:.2f} Rp national levies "
-            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% VAT) "
+            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% VAT){exempt_part} "
             "= {final_rp:.2f} Rp/kWh = {final_chf:.4f} CHF/kWh"
         ),
         "fr": (
             "{tariff_rp:.2f} Rp tarif saisi manuellement + {national_rp:.2f} Rp redevances nationales "
-            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% TVA) "
+            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% TVA){exempt_part} "
             "= {final_rp:.2f} Rp/kWh = {final_chf:.4f} CHF/kWh"
         ),
         "it": (
             "{tariff_rp:.2f} Rp tariffa inserita manualmente + {national_rp:.2f} Rp oneri nazionali "
-            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% IVA) "
+            "= {subtotal_rp:.2f} Rp, × {factor:.3f} ({vat:g}% IVA){exempt_part} "
             "= {final_rp:.2f} Rp/kWh = {final_chf:.4f} CHF/kWh"
         ),
     },

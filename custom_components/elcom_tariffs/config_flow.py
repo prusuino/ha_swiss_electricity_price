@@ -32,6 +32,8 @@ from homeassistant.helpers.selector import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_CANTONAL_LEVIES,
+    CONF_CANTONAL_LEVIES_VAT_EXEMPT,
     CONF_ENERGY_PRODUCT,
     CONF_GRID_INCLUDES_LEVIES,
     CONF_GRID_PRODUCT,
@@ -47,15 +49,17 @@ from .const import (
     CONF_OPERATOR_NAME,
     CONF_TARIFF_URL,
     CONF_URL_IS_MANUAL,
+    CONF_VAT_EXEMPT_LEVIES_RP,
     CONF_VAT_PERCENT,
     DEFAULT_MANUAL_HIGH_FROM,
     DEFAULT_MANUAL_HIGH_TO,
     DEFAULT_MANUAL_HIGH_WEEKDAYS,
     DEFAULT_NATIONAL_LEVIES_RP,
+    DEFAULT_VAT_EXEMPT_LEVIES_RP,
     DEFAULT_VAT_PERCENT,
     DOMAIN,
 )
-from .coordinator import WEEKDAY_ABBR, async_fetch_raw_tariffs
+from .coordinator import WEEKDAY_ABBR, ElcomTariffCoordinator, async_fetch_raw_tariffs
 from .directory import (
     async_fetch_operator_directory,
     async_fetch_operator_url,
@@ -121,6 +125,36 @@ def _list_municipalities(raw: dict) -> list[str]:
     return sorted(names)
 
 
+def _list_cantonal(raw: dict) -> dict[str, dict]:
+    """The file's cantonal levies valid today, parsed as the coordinator
+    will parse them (same names, same rates)."""
+    return ElcomTariffCoordinator._parse_tariff_records(_current_tariffs(raw))["cantonal"]
+
+
+def _cantonal_label(name: str, levy: dict) -> str:
+    """A cantonal levy as listed for choosing: its name and its rate(s)."""
+    high, low = levy.get("high_rp_kwh"), levy.get("low_rp_kwh")
+    if high is not None and low is not None:
+        return f"{name} ({high:g} / {low:g} Rp/kWh)"
+    windows = levy.get("windows") or []
+    rp = windows[0]["rp_kwh"] if windows else 0.0
+    base = levy.get("base_price_chf_month") or 0
+    if not rp and base:
+        return f"{name} ({base:g} {levy.get('base_price_unit') or 'CHF/M'})"
+    return f"{name} ({rp:g} Rp/kWh)"
+
+
+def _cantonal_selector(cantonal: dict[str, dict]) -> SelectSelector:
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[SelectOptionDict(value=name, label=_cantonal_label(name, levy)) for name, levy in cantonal.items()],
+            multiple=True,
+            mode=SelectSelectorMode.LIST,
+            sort=False,
+        )
+    )
+
+
 class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
     """Setup wizard: search + pick a grid operator, then a municipality + customer tariff."""
 
@@ -132,6 +166,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
         self._selected: dict | None = None
         self._raw: dict | None = None
         self._verified: set[str] = set()
+        self._location: dict | None = None
 
     async def _async_verify_matches(self) -> None:
         """Live-check the direct links of the operators about to be shown
@@ -270,9 +305,9 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             )
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=_entry_title(self.hass, self._selected["name"], municipality, user_input[CONF_ENERGY_PRODUCT]),
-                data={
+            self._location = {
+                "title": _entry_title(self.hass, self._selected["name"], municipality, user_input[CONF_ENERGY_PRODUCT]),
+                "data": {
                     CONF_OPERATOR_ID: self._selected["id"],
                     CONF_OPERATOR_NAME: self._selected["name"],
                     CONF_TARIFF_URL: self._selected["url"],
@@ -281,16 +316,22 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_ENERGY_PRODUCT: user_input[CONF_ENERGY_PRODUCT],
                     CONF_GRID_PRODUCT: user_input[CONF_GRID_PRODUCT],
                     CONF_GRID_INCLUDES_LEVIES: grid_includes_levies,
+                    CONF_CANTONAL_LEVIES: [],
+                    CONF_CANTONAL_LEVIES_VAT_EXEMPT: [],
                 },
-                options={
+                "options": {
                     # The VSE tariff format defines the grid price as including
                     # the federal levies, so nothing is added on top in that
                     # case; operators publishing a net grid price get the
                     # published levy total added. Adjustable later either way.
                     CONF_NATIONAL_LEVIES_RP: 0.0 if grid_includes_levies else DEFAULT_NATIONAL_LEVIES_RP,
                     CONF_VAT_PERCENT: DEFAULT_VAT_PERCENT,
+                    CONF_VAT_EXEMPT_LEVIES_RP: DEFAULT_VAT_EXEMPT_LEVIES_RP,
                 },
-            )
+            }
+            if _list_cantonal(self._raw):
+                return await self.async_step_cantonal()
+            return self._create_location_entry()
 
         fields: dict[Any, Any] = {}
         if municipalities:
@@ -302,6 +343,40 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="location",
             data_schema=vol.Schema(fields),
             description_placeholders={"operator": self._selected["name"]},
+        )
+
+    def _create_location_entry(self):
+        assert self._location is not None
+        return self.async_create_entry(
+            title=self._location["title"], data=self._location["data"], options=self._location["options"]
+        )
+
+    async def async_step_cantonal(self, user_input: dict[str, Any] | None = None):
+        """Only for a file with a `cantonalTaxes` section: which of its
+        entries belong on this customer's bill, and which of those are
+        billed without VAT. Nothing is preselected — operators put very
+        different things under this heading (cantonal taxes, but also the
+        federal levies or municipal fees), so a default would be wrong for
+        somebody, and double-counting the federal levies would be the
+        most likely error."""
+        assert self._selected is not None and self._raw is not None and self._location is not None
+        cantonal = _list_cantonal(self._raw)
+        if user_input is not None:
+            chosen = [n for n in user_input.get(CONF_CANTONAL_LEVIES, []) if n in cantonal]
+            exempt = [n for n in user_input.get(CONF_CANTONAL_LEVIES_VAT_EXEMPT, []) if n in chosen]
+            self._location["data"][CONF_CANTONAL_LEVIES] = chosen
+            self._location["data"][CONF_CANTONAL_LEVIES_VAT_EXEMPT] = exempt
+            return self._create_location_entry()
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_CANTONAL_LEVIES, default=[]): _cantonal_selector(cantonal),
+                vol.Optional(CONF_CANTONAL_LEVIES_VAT_EXEMPT, default=[]): _cantonal_selector(cantonal),
+            }
+        )
+        return self.async_show_form(
+            step_id="cantonal",
+            data_schema=schema,
+            description_placeholders={"operator": self._selected["name"], "count": str(len(cantonal))},
         )
 
     async def async_step_manual(self, user_input: dict[str, Any] | None = None):
@@ -337,6 +412,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                     options={
                         CONF_NATIONAL_LEVIES_RP: DEFAULT_NATIONAL_LEVIES_RP,
                         CONF_VAT_PERCENT: DEFAULT_VAT_PERCENT,
+                        CONF_VAT_EXEMPT_LEVIES_RP: DEFAULT_VAT_EXEMPT_LEVIES_RP,
                     },
                 )
 
@@ -416,12 +492,14 @@ class ElcomTariffOptionsFlow(OptionsFlow):
         energy_products = list(data.get("energy", {}))
         grid_products = list(data.get("grid", {}))
         municipalities = sorted(data.get("municipalities", {}))
+        cantonal = data.get("cantonal", {})
         selectable = bool(energy_products and grid_products)
 
         if user_input is not None:
             options = {
                 CONF_NATIONAL_LEVIES_RP: user_input[CONF_NATIONAL_LEVIES_RP],
                 CONF_VAT_PERCENT: user_input[CONF_VAT_PERCENT],
+                CONF_VAT_EXEMPT_LEVIES_RP: user_input[CONF_VAT_EXEMPT_LEVIES_RP],
             }
             if selectable:
                 new_data = {
@@ -431,6 +509,12 @@ class ElcomTariffOptionsFlow(OptionsFlow):
                 }
                 if municipalities:
                     new_data[CONF_MUNICIPALITY] = user_input[CONF_MUNICIPALITY]
+                if cantonal:
+                    chosen = [n for n in user_input.get(CONF_CANTONAL_LEVIES, []) if n in cantonal]
+                    new_data[CONF_CANTONAL_LEVIES] = chosen
+                    new_data[CONF_CANTONAL_LEVIES_VAT_EXEMPT] = [
+                        n for n in user_input.get(CONF_CANTONAL_LEVIES_VAT_EXEMPT, []) if n in chosen
+                    ]
                 if new_data != dict(entry.data):
                     unique_id = _unique_id(
                         new_data[CONF_OPERATOR_ID],
@@ -472,6 +556,11 @@ class ElcomTariffOptionsFlow(OptionsFlow):
             fields[vol.Required(CONF_ENERGY_PRODUCT, default=default)] = selector
             selector, default = _select(grid_products, entry.data.get(CONF_GRID_PRODUCT))
             fields[vol.Required(CONF_GRID_PRODUCT, default=default)] = selector
+            if cantonal:
+                chosen = [n for n in entry.data.get(CONF_CANTONAL_LEVIES) or [] if n in cantonal]
+                exempt = [n for n in entry.data.get(CONF_CANTONAL_LEVIES_VAT_EXEMPT) or [] if n in chosen]
+                fields[vol.Optional(CONF_CANTONAL_LEVIES, default=chosen)] = _cantonal_selector(cantonal)
+                fields[vol.Optional(CONF_CANTONAL_LEVIES_VAT_EXEMPT, default=exempt)] = _cantonal_selector(cantonal)
         fields[
             vol.Required(
                 CONF_NATIONAL_LEVIES_RP,
@@ -481,6 +570,12 @@ class ElcomTariffOptionsFlow(OptionsFlow):
         fields[vol.Required(CONF_VAT_PERCENT, default=current.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT))] = vol.Coerce(
             float
         )
+        fields[
+            vol.Required(
+                CONF_VAT_EXEMPT_LEVIES_RP,
+                default=current.get(CONF_VAT_EXEMPT_LEVIES_RP, DEFAULT_VAT_EXEMPT_LEVIES_RP),
+            )
+        ] = vol.Coerce(float)
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(fields),

@@ -37,6 +37,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_CANTONAL_LEVIES,
     CONF_ENERGY_PRODUCT,
     CONF_GRID_PRODUCT,
     CONF_MANUAL_GRID_FEE_CHF,
@@ -446,6 +447,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             grid_tariffs = parsed["grid"]
             metering_tariffs = parsed["metering"]
             municipalities = parsed["municipalities"]
+            cantonal = parsed["cantonal"]
 
             if not energy_tariffs:
                 raise UpdateFailed("No energy tariffs found in the operator's tariff data")
@@ -484,6 +486,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                 "grid": grid_tariffs,
                 "metering": metering_tariffs,
                 "municipalities": municipalities,
+                "cantonal": cantonal,
                 "next_period": next_period,
             }
             self._async_check_selection(data)
@@ -515,6 +518,11 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             missing.append(grid)
         if municipality and data["municipalities"] and municipality not in data["municipalities"]:
             missing.append(municipality)
+        # A chosen cantonal levy the file no longer carries: the price is
+        # computed without it (too low, not unavailable), so it is named.
+        for name in entry.data.get(CONF_CANTONAL_LEVIES) or []:
+            if name not in data.get("cantonal", {}):
+                missing.append(name)
         if not missing:
             ir.async_delete_issue(self.hass, DOMAIN, selection_issue_id(entry))
             return
@@ -595,14 +603,65 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             return round(value, 3)
         return round(value * 100, 3)
 
+    @staticmethod
+    def cantonal_levy_name(record: dict, canton: dict) -> str:
+        """The name a `cantonalTaxes` entry is known by in the entry data
+        and the entity ids: canton abbreviation plus the operator's own
+        label — the entry's comment where there is one ("VD – Taxe
+        cantonale"), else the record's product name ("GE – PCP - Profil
+        Double"). Stable across years as long as the operator keeps its
+        wording, which is what the product names rely on as well."""
+        abbr = (canton.get("cantonName") or "").strip()
+        label = (canton.get("cantonComment") or record.get("tariffName") or "").strip()
+        return f"{abbr} – {label}" if abbr and label else abbr or label
+
+    @classmethod
+    def _parse_cantonal_levies(cls, record: dict, cantonal: dict[str, dict]) -> None:
+        """The `cantonalTaxes` entries of one regional-fee record, parsed
+        like a product (they can carry time windows: Geneva's PCP has a
+        high and a low rate). Operators fill this section very
+        differently — the survey of 11/2026 found cantonal taxes (VD, NE,
+        JU, GE, ZH), but also the federal levies (one operator in BE),
+        municipal concession fees (ZG, SG, AG) and a lump sum per month
+        with no per-kWh rate (SG) under this heading. The entries are
+        therefore shown and offered, never added to the price unasked."""
+        for canton in record.get("prices", {}).get("cantonalTaxes", []) or []:
+            if not isinstance(canton, dict):
+                continue
+            name = cls.cantonal_levy_name(record, canton)
+            raw_windows = [w for w in canton.get("cantonEnergy") or [] if isinstance(w, dict) and w.get("price") is not None]
+            base = canton.get("cantonBase") or {}
+            if not name or (not any(w.get("price") for w in raw_windows) and not base.get("price")):
+                continue
+            # The per-kWh figures take the municipal-levy reading (CHF/kWh
+            # wanted, Rp or hundredths of a Rp tolerated).
+            windows = [{**w, "price": cls._municipal_levy_rp(name, w["price"]) / 100} for w in raw_windows] or [
+                {"from": "00:00", "to": "00:00", "price": 0.0, "priceUnit": "CHF/kWh"}
+            ]
+            parsed = cls._parse_time_tariff(
+                {
+                    "tariffName": name,
+                    "customerType": record.get("customerType"),
+                    "startDate": record.get("startDate"),
+                    "endDate": record.get("endDate"),
+                    "prices": {"energy": windows, "base": base},
+                }
+            )
+            parsed["canton"] = canton.get("cantonName")
+            parsed["comment"] = canton.get("cantonComment") or None
+            parsed["tariff_name"] = record.get("tariffName")
+            cantonal[name] = parsed
+
     @classmethod
     def _parse_tariff_records(cls, tariffs: list[dict]) -> dict:
-        """Energy/grid products, metering fees and municipality levies of
-        one set of records (today's set, or next year's for the preview)."""
+        """Energy/grid products, metering fees, municipality and cantonal
+        levies of one set of records (today's set, or next year's for the
+        preview)."""
         energy_tariffs: dict[str, dict] = {}
         grid_tariffs: dict[str, dict] = {}
         metering_tariffs: dict[str, dict] = {}
         municipalities: dict[str, dict] = {}
+        cantonal: dict[str, dict] = {}
         secondary_meter_municipalities: dict[str, dict] = {}
         for t in tariffs:
             ttype = t.get("tariffType")
@@ -648,6 +707,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                         # it publishes as an implausible per-kWh figure.
                         "comment": m.get("municipalityComment") or None,
                     }
+                cls._parse_cantonal_levies(t, cantonal)
         # A municipality that has nothing but a secondary-meter levy
         # still gets that one rather than none.
         for mname, levy in secondary_meter_municipalities.items():
@@ -657,6 +717,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             "grid": grid_tariffs,
             "metering": metering_tariffs,
             "municipalities": municipalities,
+            "cantonal": cantonal,
         }
 
     @staticmethod

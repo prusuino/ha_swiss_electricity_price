@@ -1,6 +1,7 @@
 """Sensors for the Swiss Electricity Price (ElCom) integration — all tariff
 products (rate, high/low reference prices, monthly base fee) + metering fees
-+ municipality levies + combined price, for the selected grid operator."""
++ municipality and cantonal levies + combined price, for the selected grid
+operator."""
 from __future__ import annotations
 
 import hashlib
@@ -17,19 +18,19 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
 from .const import (
+    CONF_CANTONAL_LEVIES,
+    CONF_CANTONAL_LEVIES_VAT_EXEMPT,
     CONF_ENERGY_PRODUCT,
     CONF_GRID_INCLUDES_LEVIES,
     CONF_GRID_PRODUCT,
     CONF_MANUAL_HIGH_RP,
     CONF_MUNICIPALITY,
-    CONF_NATIONAL_LEVIES_RP,
-    CONF_VAT_PERCENT,
-    DEFAULT_NATIONAL_LEVIES_RP,
-    DEFAULT_VAT_PERCENT,
     DOMAIN,
 )
 from .coordinator import ElcomTariffCoordinator, current_rate
 from .device import device_info, entity_id_prefix
+from .levies import Levies, entry_levies
+from .levies import level_rp as _level_rp
 from .localization import t, tariff_level_text
 from .price_schedule import (
     combined_price_at,
@@ -160,6 +161,11 @@ async def async_setup_entry(
                 new.append(
                     ElcomMunicipalityLevySensor(hass, coordinator, entry, name, prefix, slugs.get("municipality", name))
                 )
+        slugs.claim("cantonal", list(data.get("cantonal", {})))
+        for name in data.get("cantonal", {}):
+            if ("cantonal", name) not in known:
+                known.add(("cantonal", name))
+                new.append(ElcomCantonalLevySensor(hass, coordinator, entry, name, prefix, slugs.get("cantonal", name)))
         if new:
             async_add_entities(new)
 
@@ -605,6 +611,107 @@ class ElcomMunicipalityLevySensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
         }
 
 
+class ElcomCantonalLevySensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
+    """One entry of the operator file's `cantonalTaxes` section: its rate
+    in force (Rp/kWh — Geneva's PCP has a high and a low rate), with the
+    canton, the operator's label and whether this entry adds it to the
+    combined price (chosen at setup / in the Configure dialog) and with or
+    without VAT. Shown for every entry so the choice can be checked
+    against a bill; only the chosen ones, or all of them when the file
+    has a handful, start enabled."""
+
+    _attr_has_entity_name = False
+    _attr_native_unit_of_measurement = "Rp/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:bank"
+
+    def __init__(
+        self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry,
+        name: str, prefix: str, slug: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._name_key = name
+        self._attr_name = f"{t('cantonal_levy_prefix', hass)} {name}"
+        chosen = entry.data.get(CONF_CANTONAL_LEVIES) or []
+        count = len((coordinator.data or {}).get("cantonal", {}))
+        self._attr_entity_registry_enabled_default = name in chosen or count <= 4
+        self._attr_unique_id = f"{entry.entry_id}_cantonal_{slug}"
+        self._attr_device_info = device_info(hass, entry)
+        self.entity_id = f"sensor.{prefix}_cantonal_levy_{slug}"
+
+    def _data(self) -> dict:
+        return (self.coordinator.data or {}).get("cantonal", {}).get(self._name_key, {})
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._data())
+
+    @property
+    def native_value(self):
+        d = self._data()
+        if not d:
+            return None
+        rp, _level = current_rate(d, dt_util.now())
+        return rp
+
+    @property
+    def extra_state_attributes(self):
+        d = self._data()
+        if not d:
+            return {}
+        return {
+            "canton": d.get("canton"),
+            "comment": d.get("comment"),
+            "tariff_name": d.get("tariff_name"),
+            "high_rp_kwh": d.get("high_rp_kwh"),
+            "low_rp_kwh": d.get("low_rp_kwh"),
+            "base_price": d.get("base_price_chf_month"),
+            "base_price_unit": d.get("base_price_unit"),
+            "schedule": d.get("schedule"),
+            "valid_from": d.get("valid_from"),
+            "valid_to": d.get("valid_to"),
+            "included_in_price": self._name_key in (self._entry.data.get(CONF_CANTONAL_LEVIES) or []),
+            "vat_exempt": self._name_key in (self._entry.data.get(CONF_CANTONAL_LEVIES_VAT_EXEMPT) or []),
+        }
+
+
+def _calculation_attributes(
+    hass: HomeAssistant, levies: Levies, b: dict, *, energy_product: str, grid_product: str, municipality: str
+) -> dict:
+    """The `calculation` text and the per-component attributes shared by
+    the combined-price sensors, from a `Levies.breakdown()`. The cantonal
+    and VAT-exempt parts appear in the text only when they are non-zero,
+    so an entry without them reads exactly as before."""
+    cantonal_part = t("calculation_cantonal_part", hass, cantonal_rp=b["cantonal_rp"]) if b["cantonal_rp"] else ""
+    exempt_total = b["cantonal_exempt_rp"] + b["exempt_rp"]
+    exempt_part = (
+        t("calculation_exempt_part", hass, taxed_rp=b["taxed_rp"], exempt_rp=exempt_total) if exempt_total else ""
+    )
+    calculation = t(
+        "calculation_formula",
+        hass,
+        **b,
+        cantonal_part=cantonal_part,
+        exempt_part=exempt_part,
+        energy_product=energy_product,
+        grid_product=grid_product,
+        municipality=municipality,
+    )
+    return {
+        "calculation": calculation,
+        "energy_rp_kwh": b["energy_rp"],
+        "grid_rp_kwh": b["grid_rp"],
+        "municipality_rp_kwh": b["municipality_rp"],
+        "cantonal_levies_rp_kwh": b["cantonal_rp"],
+        "cantonal_levies_vat_exempt_rp_kwh": b["cantonal_exempt_rp"],
+        **levies.attributes(),
+        "municipality": municipality,
+        "energy_product": energy_product,
+        "grid_product": grid_product,
+    }
+
+
 def _calculation_components(coordinator: ElcomTariffCoordinator, entry: ConfigEntry) -> dict | None:
     data = coordinator.data or {}
     municipality = entry.data.get(CONF_MUNICIPALITY, "")
@@ -626,8 +733,9 @@ def _calculation_components(coordinator: ElcomTariffCoordinator, entry: ConfigEn
 
 class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
     """Combined current electricity price for the configured municipality +
-    customer tariff, including national levies and VAT. The energy and grid
-    rates are the ones active right now (resolved on every read)."""
+    customer tariff, including the levies and VAT (see levies.py). The
+    energy and grid rates are the ones active right now (resolved on every
+    read)."""
 
     _attr_has_entity_name = False
     _attr_native_unit_of_measurement = "CHF/kWh"
@@ -645,11 +753,8 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         self._attr_device_info = device_info(hass, entry)
         self.entity_id = f"sensor.{prefix}_price_current"
 
-    def _national_levies_rp(self) -> float:
-        return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
-
-    def _vat_percent(self) -> float:
-        return self._entry.options.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
+    def _levies(self) -> Levies:
+        return entry_levies(self._entry, self.coordinator.data)
 
     def _components(self) -> dict | None:
         return _calculation_components(self.coordinator, self._entry)
@@ -665,14 +770,12 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         if not c:
             return None
         now = dt_util.now()
-        total_rp = (
-            (current_rate(c["energy"], now)[0] or 0)
-            + (current_rate(c["grid"], now)[0] or 0)
-            + (c["municipality"]["rp_kwh"] or 0)
-            + self._national_levies_rp()
+        return self._levies().total_chf(
+            current_rate(c["energy"], now)[0] or 0,
+            current_rate(c["grid"], now)[0] or 0,
+            c["municipality"]["rp_kwh"] or 0,
+            when=now,
         )
-        total_rp *= 1 + self._vat_percent() / 100
-        return round(total_rp / 100, 5)
 
     @property
     def extra_state_attributes(self):
@@ -680,49 +783,25 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
         if not c:
             return {}
         now = dt_util.now()
+        levies = self._levies()
         energy_rp_now, energy_level = current_rate(c["energy"], now)
-        energy_rp = energy_rp_now or 0
-        grid_rp = current_rate(c["grid"], now)[0] or 0
         municipality_rp = c["municipality"]["rp_kwh"] or 0
-        national_rp = self._national_levies_rp()
-        vat = self._vat_percent()
-        subtotal_rp = energy_rp + grid_rp + municipality_rp + national_rp
-        final_rp = subtotal_rp * (1 + vat / 100)
-        energy_product = self._entry.data[CONF_ENERGY_PRODUCT]
-        grid_product = self._entry.data[CONF_GRID_PRODUCT]
-        municipality = self._entry.data.get(CONF_MUNICIPALITY, "")
-        calculation = t(
-            "calculation_formula",
-            self._hass_ref,
-            energy_rp=energy_rp,
-            grid_rp=grid_rp,
-            municipality_rp=municipality_rp,
-            national_rp=national_rp,
-            subtotal_rp=subtotal_rp,
-            factor=1 + vat / 100,
-            vat=vat,
-            final_rp=final_rp,
-            final_chf=final_rp / 100,
-            energy_product=energy_product,
-            grid_product=grid_product,
-            municipality=municipality,
-        )
+        breakdown = levies.breakdown(energy_rp_now or 0, current_rate(c["grid"], now)[0] or 0, municipality_rp, when=now)
         return {
-            "calculation": calculation,
+            **_calculation_attributes(
+                self._hass_ref,
+                levies,
+                breakdown,
+                energy_product=self._entry.data[CONF_ENERGY_PRODUCT],
+                grid_product=self._entry.data[CONF_GRID_PRODUCT],
+                municipality=self._entry.data.get(CONF_MUNICIPALITY, ""),
+            ),
             "tariff_level": tariff_level_text(energy_level, self._hass_ref),
             # None for entries created before 1.5.0 (the choice did not exist yet).
             "grid_includes_national_levies": self._entry.data.get(CONF_GRID_INCLUDES_LEVIES),
-            "energy_rp_kwh": energy_rp,
-            "grid_rp_kwh": grid_rp,
-            "municipality_rp_kwh": municipality_rp,
-            "national_levies_rp_kwh": national_rp,
-            "vat_percent": vat,
-            "municipality": municipality,
-            "energy_product": energy_product,
-            "grid_product": grid_product,
             **localized(
                 schedule_attributes(
-                    combined_price_at(c["energy"], c["grid"], municipality_rp, national_rp, vat),
+                    combined_price_at(c["energy"], c["grid"], municipality_rp, levies),
                     [c["energy"], c["grid"]],
                     now,
                 ),
@@ -753,11 +832,8 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
         self._attr_device_info = device_info(hass, entry)
         self.entity_id = f"sensor.{prefix}_price_{level}"
 
-    def _national_levies_rp(self) -> float:
-        return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
-
-    def _vat_percent(self) -> float:
-        return self._entry.options.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
+    def _levies(self) -> Levies:
+        return entry_levies(self._entry, self.coordinator.data)
 
     def _components(self) -> dict | None:
         return _calculation_components(self.coordinator, self._entry)
@@ -778,9 +854,7 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
         grid_rp = c["grid"].get(self._key())
         if energy_rp is None or grid_rp is None:
             return None
-        total_rp = energy_rp + grid_rp + (c["municipality"]["rp_kwh"] or 0) + self._national_levies_rp()
-        total_rp *= 1 + self._vat_percent() / 100
-        return round(total_rp / 100, 5)
+        return self._levies().total_chf(energy_rp, grid_rp, c["municipality"]["rp_kwh"] or 0, level_key=self._key())
 
     @property
     def extra_state_attributes(self):
@@ -791,47 +865,16 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
         grid_rp = c["grid"].get(self._key())
         if energy_rp is None or grid_rp is None:
             return {}
-        municipality_rp = c["municipality"]["rp_kwh"] or 0
-        national_rp = self._national_levies_rp()
-        vat = self._vat_percent()
-        subtotal_rp = energy_rp + grid_rp + municipality_rp + national_rp
-        final_rp = subtotal_rp * (1 + vat / 100)
-        energy_product = self._entry.data[CONF_ENERGY_PRODUCT]
-        grid_product = self._entry.data[CONF_GRID_PRODUCT]
-        municipality = self._entry.data.get(CONF_MUNICIPALITY, "")
-        calculation = t(
-            "calculation_formula",
+        levies = self._levies()
+        breakdown = levies.breakdown(energy_rp, grid_rp, c["municipality"]["rp_kwh"] or 0, level_key=self._key())
+        return _calculation_attributes(
             self._hass_ref,
-            energy_rp=energy_rp,
-            grid_rp=grid_rp,
-            municipality_rp=municipality_rp,
-            national_rp=national_rp,
-            subtotal_rp=subtotal_rp,
-            factor=1 + vat / 100,
-            vat=vat,
-            final_rp=final_rp,
-            final_chf=final_rp / 100,
-            energy_product=energy_product,
-            grid_product=grid_product,
-            municipality=municipality,
+            levies,
+            breakdown,
+            energy_product=self._entry.data[CONF_ENERGY_PRODUCT],
+            grid_product=self._entry.data[CONF_GRID_PRODUCT],
+            municipality=self._entry.data.get(CONF_MUNICIPALITY, ""),
         )
-        return {
-            "calculation": calculation,
-            "energy_rp_kwh": energy_rp,
-            "grid_rp_kwh": grid_rp,
-            "municipality_rp_kwh": municipality_rp,
-            "national_levies_rp_kwh": national_rp,
-            "vat_percent": vat,
-            "municipality": municipality,
-            "energy_product": energy_product,
-            "grid_product": grid_product,
-        }
-
-
-def _level_rp(product: dict, key: str) -> float:
-    """A product's high or low rate; a flat product has only its one rate."""
-    value = product.get(key)
-    return value if value is not None else product["windows"][0]["rp_kwh"]
 
 
 class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
@@ -859,15 +902,11 @@ class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], Sens
         self._attr_device_info = device_info(hass, entry)
         self.entity_id = f"sensor.{prefix}_price_next_period"
 
-    def _national_levies_rp(self) -> float:
-        return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
-
-    def _vat_percent(self) -> float:
-        return self._entry.options.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
-
     def _components(self) -> dict | None:
         """Next period's energy/grid product and municipal levy (next
-        period's own levy when it publishes one, else today's)."""
+        period's own levy when it publishes one, else today's), and the
+        levies with the next period's cantonal section (today's when the
+        upcoming set has none)."""
         data = self.coordinator.data or {}
         upcoming = data.get("next_period")
         if not upcoming:
@@ -881,11 +920,14 @@ class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], Sens
         levy = municipalities.get(municipality) if municipalities else {"rp_kwh": 0.0}
         if levy is None:
             return None
-        return {"energy": energy, "grid": grid, "municipality_rp": levy.get("rp_kwh") or 0.0, "valid_from": upcoming["valid_from"]}
-
-    def _combined(self, energy_rp: float, grid_rp: float, municipality_rp: float) -> float:
-        total_rp = energy_rp + grid_rp + municipality_rp + self._national_levies_rp()
-        return round(total_rp * (1 + self._vat_percent() / 100) / 100, 5)
+        cantonal_source = upcoming if upcoming.get("cantonal") else data
+        return {
+            "energy": energy,
+            "grid": grid,
+            "municipality_rp": levy.get("rp_kwh") or 0.0,
+            "valid_from": upcoming["valid_from"],
+            "levies": entry_levies(self._entry, data, cantonal_source),
+        }
 
     @property
     def available(self) -> bool:
@@ -897,8 +939,8 @@ class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], Sens
         if not c:
             return None
         now = dt_util.now()
-        return self._combined(
-            current_rate(c["energy"], now)[0] or 0, current_rate(c["grid"], now)[0] or 0, c["municipality_rp"]
+        return c["levies"].total_chf(
+            current_rate(c["energy"], now)[0] or 0, current_rate(c["grid"], now)[0] or 0, c["municipality_rp"], when=now
         )
 
     @property
@@ -907,6 +949,7 @@ class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], Sens
         if not c:
             return {}
         current = _calculation_components(self.coordinator, self._entry)
+        current_levies = entry_levies(self._entry, self.coordinator.data)
         attrs = {
             "valid_from": c["valid_from"],
             "energy_product": self._entry.data.get(CONF_ENERGY_PRODUCT),
@@ -920,13 +963,16 @@ class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], Sens
         }
         for level in ("high", "low"):
             key = f"{level}_rp_kwh"
-            new = self._combined(_level_rp(c["energy"], key), _level_rp(c["grid"], key), c["municipality_rp"])
+            new = c["levies"].total_chf(
+                _level_rp(c["energy"], key), _level_rp(c["grid"], key), c["municipality_rp"], level_key=key
+            )
             attrs[f"price_{level}"] = new
             if current:
-                old = self._combined(
+                old = current_levies.total_chf(
                     _level_rp(current["energy"], key),
                     _level_rp(current["grid"], key),
                     current["municipality"]["rp_kwh"] or 0,
+                    level_key=key,
                 )
                 attrs[f"current_price_{level}"] = old
                 attrs[f"change_{level}_percent"] = round((new - old) / old * 100, 1) if old else None
@@ -1001,51 +1047,33 @@ class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], S
         self._attr_device_info = device_info(hass, entry)
         self.entity_id = f"sensor.{prefix}_price_current"
 
-    def _national_levies_rp(self) -> float:
-        return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
-
-    def _vat_percent(self) -> float:
-        return self._entry.options.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
+    def _levies(self) -> Levies:
+        return entry_levies(self._entry, self.coordinator.data)
 
     @property
     def native_value(self):
         rp, _ = current_rate(self.coordinator.data or {}, dt_util.now())
         if rp is None:
             return None
-        total_rp = (rp + self._national_levies_rp()) * (1 + self._vat_percent() / 100)
-        return round(total_rp / 100, 5)
+        return self._levies().total_chf(rp, 0.0)
 
     @property
     def extra_state_attributes(self):
-        rp, level = current_rate(self.coordinator.data or {}, dt_util.now())
+        now = dt_util.now()
+        rp, level = current_rate(self.coordinator.data or {}, now)
         if rp is None:
             return {}
-        national_rp = self._national_levies_rp()
-        vat = self._vat_percent()
-        subtotal_rp = rp + national_rp
-        final_rp = subtotal_rp * (1 + vat / 100)
-        calculation = t(
-            "calculation_formula_manual",
-            self._hass_ref,
-            tariff_rp=rp,
-            national_rp=national_rp,
-            subtotal_rp=subtotal_rp,
-            factor=1 + vat / 100,
-            vat=vat,
-            final_rp=final_rp,
-            final_chf=final_rp / 100,
-        )
+        levies = self._levies()
+        b = levies.breakdown(rp, 0.0)
+        exempt_part = t("calculation_exempt_part", self._hass_ref, taxed_rp=b["taxed_rp"], exempt_rp=b["exempt_rp"]) if b["exempt_rp"] else ""
+        calculation = t("calculation_formula_manual", self._hass_ref, tariff_rp=rp, exempt_part=exempt_part, **b)
         data = self.coordinator.data or {}
         return {
             "calculation": calculation,
             "tariff_level": tariff_level_text(level, self._hass_ref),
             "tariff_rp_kwh": rp,
-            "national_levies_rp_kwh": national_rp,
-            "vat_percent": vat,
-            **localized(
-                schedule_attributes(manual_price_at(data, national_rp, vat), [data], dt_util.now()),
-                self._hass_ref,
-            ),
+            **levies.attributes(),
+            **localized(schedule_attributes(manual_price_at(data, levies), [data], now), self._hass_ref),
         }
 
 
@@ -1070,20 +1098,13 @@ class ElcomManualPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
         self._attr_device_info = device_info(hass, entry)
         self.entity_id = f"sensor.{prefix}_price_{level}"
 
-    def _national_levies_rp(self) -> float:
-        return self._entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
-
-    def _vat_percent(self) -> float:
-        return self._entry.options.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
-
     @property
     def native_value(self):
         key = "high_rp_kwh" if self._level == "high" else "low_rp_kwh"
         rp = (self.coordinator.data or {}).get(key)
         if rp is None:
             return None
-        total_rp = (rp + self._national_levies_rp()) * (1 + self._vat_percent() / 100)
-        return round(total_rp / 100, 5)
+        return entry_levies(self._entry, self.coordinator.data).total_chf(rp, 0.0)
 
 
 class ElcomManualGridFeeSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):

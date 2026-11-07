@@ -20,6 +20,14 @@
           "grid_includes_levies": "La tariffa di rete include già gli oneri federali"
         }
       },
+      "cantonal": {
+        "title": "{operator}: tasse cantonali",
+        "description": "Il file tariffario di {operator} elenca {count} voci sotto tasse cantonali. Seleziona quelle che compaiono sulla tua fattura – vengono aggiunte al prezzo combinato – e, tra queste, quelle che la fattura indica senza IVA (una tassa cantonale come i 0.6 ct./kWh del Canton Vaud è fatturata senza IVA, un emolumento cantonale con). Nulla è preselezionato: gli operatori inseriscono cose diverse sotto questo titolo, alcuni persino gli oneri federali, già coperti dal passo precedente – selezionarli anche qui li conterebbe due volte. Entrambe le scelte possono essere modificate in seguito nel dialogo «Configura»; ogni voce riceve inoltre un proprio sensore.",
+        "data": {
+          "cantonal_levies": "Tasse cantonali sulla mia fattura",
+          "cantonal_levies_vat_exempt": "Di queste, fatturate senza IVA"
+        }
+      },
       "manual": {
         "title": "{operator}",
         "description": "Non è stato possibile trovare un file tariffario utilizzabile per {operator} — né il link registrato né un URL da te fornito hanno funzionato (oppure non conteneva dati utilizzabili). Inserisci invece le tue tariffe conosciute manualmente; le trovi sulla tua bolletta elettrica o nel listino prezzi dell'operatore.",
@@ -52,10 +60,13 @@
           "municipality": "Comune",
           "energy_product": "Prodotto tariffario energia",
           "grid_product": "Prodotto tariffario rete",
+          "cantonal_levies": "Tasse cantonali sulla mia fattura",
+          "cantonal_levies_vat_exempt": "Di queste, fatturate senza IVA",
           "national_levies_rp": "Oneri nazionali sull'elettricità (Rp/kWh)",
-          "vat_percent": "Aliquota IVA (%)"
+          "vat_percent": "Aliquota IVA (%)",
+          "vat_exempt_levies_rp": "Tasse esenti da IVA (ct./kWh, aggiunte dopo l'IVA)"
         },
-        "description": "Oneri nazionali e aliquota IVA valgono per i sensori di prezzo combinati. Per una voce basata sul file tariffario di {operator}, il comune e i prodotti tariffari energia e rete possono essere scelti di nuovo qui dal file attuale: gli operatori rinominano i prodotti o ristrutturano il file da un anno all'altro, e i sensori di prezzo combinati restano non disponibili finché non vengono scelti i nomi attuali. Una modifica ricarica la voce; gli ID delle entità e la cronologia vengono mantenuti."
+        "description": "Oneri nazionali, aliquota IVA e l'importo esente da IVA valgono per i sensori di prezzo combinati. Per una voce basata sul file tariffario di {operator}, il comune e i prodotti tariffari energia e rete possono essere scelti di nuovo qui dal file attuale: gli operatori rinominano i prodotti o ristrutturano il file da un anno all'altro, e i sensori di prezzo combinati restano non disponibili finché non vengono scelti i nomi attuali. Se il file elenca tasse cantonali, seleziona quelle sulla tua fattura e, tra queste, quelle fatturate senza IVA. Ognuna di queste modifiche ricarica la voce; gli ID delle entità e la cronologia vengono mantenuti."
       }
     },
     "error": {

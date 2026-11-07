@@ -22,17 +22,9 @@ from datetime import datetime, timedelta, timezone
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    CONF_ENERGY_PRODUCT,
-    CONF_GRID_PRODUCT,
-    CONF_MANUAL_HIGH_RP,
-    CONF_MUNICIPALITY,
-    CONF_NATIONAL_LEVIES_RP,
-    CONF_VAT_PERCENT,
-    DEFAULT_NATIONAL_LEVIES_RP,
-    DEFAULT_VAT_PERCENT,
-)
+from .const import CONF_ENERGY_PRODUCT, CONF_GRID_PRODUCT, CONF_MANUAL_HIGH_RP, CONF_MUNICIPALITY
 from .coordinator import current_rate, next_switch_time
+from .levies import Levies, entry_levies
 from .localization import tariff_level_text
 
 # (combined price in CHF/kWh or None, canonical tariff-level key or None) at a moment
@@ -43,30 +35,29 @@ PriceAt = Callable[[datetime], tuple[float | None, str | None]]
 _CHANGE_HORIZON = timedelta(days=400)
 
 
-def combined_price_at(energy: dict, grid: dict, municipality_rp: float, levies_rp: float, vat_percent: float) -> PriceAt:
+def combined_price_at(energy: dict, grid: dict, municipality_rp: float, levies: Levies) -> PriceAt:
     """The automatic entry's combined price (energy + grid rate active at
-    the moment, municipality levy, national levies, VAT) as a function of
+    the moment, municipality levy, the levies and VAT) as a function of
     time — the same arithmetic as the combined-price sensor's state. The
     level is the energy product's, like the tariff-level sensor."""
 
     def price_at(when: datetime) -> tuple[float | None, str | None]:
         energy_rp, level = current_rate(energy, when)
         grid_rp = current_rate(grid, when)[0]
-        total_rp = (energy_rp or 0) + (grid_rp or 0) + (municipality_rp or 0) + levies_rp
-        return round(total_rp * (1 + vat_percent / 100) / 100, 5), level
+        return levies.total_chf(energy_rp or 0, grid_rp or 0, municipality_rp or 0, when=when), level
 
     return price_at
 
 
-def manual_price_at(data: dict, levies_rp: float, vat_percent: float) -> PriceAt:
-    """The manual entry's combined price (entered rate + national levies,
-    VAT) as a function of time."""
+def manual_price_at(data: dict, levies: Levies) -> PriceAt:
+    """The manual entry's combined price (entered rate + levies, VAT) as a
+    function of time."""
 
     def price_at(when: datetime) -> tuple[float | None, str | None]:
         rp, level = current_rate(data, when)
         if rp is None:
             return None, level
-        return round((rp + levies_rp) * (1 + vat_percent / 100) / 100, 5), level
+        return levies.total_chf(rp, 0.0, when=when), level
 
     return price_at
 
@@ -94,10 +85,9 @@ def entry_price_at(coordinator, entry) -> tuple[PriceAt, list[dict]] | None:
     None while the configured products (or the chosen municipality, in a
     file that has a municipality section) are not in the fetched data."""
     data = coordinator.data or {}
-    levies = entry.options.get(CONF_NATIONAL_LEVIES_RP, DEFAULT_NATIONAL_LEVIES_RP)
-    vat = entry.options.get(CONF_VAT_PERCENT, DEFAULT_VAT_PERCENT)
+    levies = entry_levies(entry, data)
     if CONF_MANUAL_HIGH_RP in entry.data:
-        return (manual_price_at(data, levies, vat), [data]) if data else None
+        return (manual_price_at(data, levies), [data]) if data else None
     energy = data.get("energy", {}).get(entry.data.get(CONF_ENERGY_PRODUCT))
     grid = data.get("grid", {}).get(entry.data.get(CONF_GRID_PRODUCT))
     if not energy or not grid:
@@ -109,7 +99,7 @@ def entry_price_at(coordinator, entry) -> tuple[PriceAt, list[dict]] | None:
         if levy is None:
             return None
         municipality_rp = levy.get("rp_kwh") or 0.0
-    return combined_price_at(energy, grid, municipality_rp, levies, vat), [energy, grid]
+    return combined_price_at(energy, grid, municipality_rp, levies), [energy, grid]
 
 
 def entry_level_product(coordinator, entry) -> dict | None:

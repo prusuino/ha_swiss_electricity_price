@@ -62,6 +62,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "metering": data.get("metering", {}),
             "municipality_count": len(municipalities),
             "municipality_names_sample": sorted(municipalities)[:20],
+            "cantonal_levies": _product_summary(data.get("cantonal", {})),
             "next_period": {
                 "valid_from": next_period.get("valid_from"),
                 "energy_products": sorted(next_period.get("energy", {})),
