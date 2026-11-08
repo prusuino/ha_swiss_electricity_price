@@ -23,7 +23,7 @@ from .price_schedule import entry_level_product, entry_price_at, level_at, level
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator: ElcomTariffCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ElcomTariffCoordinator = entry.runtime_data
     product = entry_level_product(coordinator, entry)
     if product and product.get("high_rp_kwh") is not None and product.get("low_rp_kwh") is not None:
         async_add_entities([ElcomTariffCalendar(hass, coordinator, entry, entity_id_prefix(entry))])

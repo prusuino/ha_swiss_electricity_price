@@ -8,6 +8,8 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_ENERGY_PRODUCT, CONF_GRID_PRODUCT, CONF_MANUAL_HIGH_RP, DOMAIN
 from .coordinator import ElcomManualTariffCoordinator, ElcomTariffCoordinator, manual_issue_id, selection_issue_id
+
+type ElcomConfigEntry = ConfigEntry[ElcomTariffCoordinator | ElcomManualTariffCoordinator]
 from .services import async_register_services
 
 PLATFORMS = ["sensor", "binary_sensor", "calendar", "number"]
@@ -44,13 +46,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: ElcomConfigEntry) -> bool:
     coordinator = (
         ElcomManualTariffCoordinator(hass, entry)
         if CONF_MANUAL_HIGH_RP in entry.data
         else ElcomTariffCoordinator(hass, entry)
     )
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    entry.runtime_data = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     # The tariff-window timer (see coordinator.py) is armed by every
     # successful refresh, the first one included — so its cancel hook is
@@ -76,7 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_update_listener(hass: HomeAssistant, entry: ElcomConfigEntry) -> None:
     """Push the coordinator's already-fetched data to every entity again
     when options (national levies / VAT rate) change, so the combined-price
     sensors — which read entry.options live on every access but only get
@@ -84,14 +86,12 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     immediately. A full async_reload() would also work, but re-fetches the
     operator's tariff file over the network and briefly drops every entity
     to "unavailable" just to update two locally-computed numbers."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    coordinator.async_update_listeners()
+    entry.runtime_data.async_update_listeners()
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ElcomConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
         # The "working tariff file found" repair issue belongs to the
         # running link check of a manual entry. A reload raises it again
         # right after setup if it still applies; an entry on its way out

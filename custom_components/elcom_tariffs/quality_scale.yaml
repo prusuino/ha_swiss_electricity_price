@@ -1,0 +1,82 @@
+rules:
+  # Bronze
+  action-setup: done
+  appropriate-polling:
+    status: done
+    comment: The operator's tariff file is read once a day; the active tariff window is switched by a local timer.
+  brands: done
+  common-modules:
+    status: done
+    comment: coordinator.py, tariff_period.py, levies.py, price_schedule.py, directory.py, device.py and localization.py hold the shared pieces.
+  config-flow: done
+  config-flow-test-coverage: done
+  dependency-transparency:
+    status: done
+    comment: No requirements beyond Home Assistant's own aiohttp.
+  docs-actions: done
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data:
+    status: done
+    comment: The entry's coordinator is entry.runtime_data.
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: todo
+  reauthentication-flow:
+    status: exempt
+    comment: The operators' tariff files and the ElCom directory need no credentials.
+  test-coverage: todo
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery:
+    status: exempt
+    comment: Web services, nothing on the network to discover.
+  discovery-update-info:
+    status: exempt
+    comment: No discovery.
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices:
+    status: exempt
+    comment: No devices; the data covers the Swiss grid operators registered with ElCom.
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: exempt
+    comment: One device per entry.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: todo
+  entity-translations:
+    status: todo
+    comment: Entity names come from the integration's own localization helper, not from translation keys.
+  exception-translations: done
+  icon-translations: todo
+  reconfiguration-flow: done
+  repair-issues: done
+  stale-devices:
+    status: exempt
+    comment: One device per entry.
+
+  # Platinum
+  async-dependency: done
+  inject-websession: done
+  strict-typing: todo

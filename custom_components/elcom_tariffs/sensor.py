@@ -97,7 +97,7 @@ class _SlugBook:
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: ElcomTariffCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ElcomTariffCoordinator = entry.runtime_data
     prefix = entity_id_prefix(entry)
 
     if CONF_MANUAL_HIGH_RP in entry.data:

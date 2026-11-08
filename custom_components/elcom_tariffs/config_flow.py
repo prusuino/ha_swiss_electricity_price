@@ -546,7 +546,7 @@ class ElcomTariffOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         entry = self.config_entry
         errors: dict[str, str] = {}
-        coordinator = self.hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        coordinator = getattr(entry, "runtime_data", None)
         data: dict = {}
         if CONF_MANUAL_HIGH_RP not in entry.data and coordinator is not None and coordinator.data:
             data = coordinator.data

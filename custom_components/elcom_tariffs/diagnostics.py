@@ -33,7 +33,7 @@ def _product_summary(products: dict[str, dict]) -> dict[str, Any]:
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
-    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    coordinator = getattr(entry, "runtime_data", None)
     data = (coordinator.data if coordinator is not None else None) or {}
     municipalities = data.get("municipalities", {})
     next_period = data.get("next_period") or {}

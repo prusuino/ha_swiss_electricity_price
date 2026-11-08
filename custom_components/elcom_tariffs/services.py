@@ -74,7 +74,7 @@ def _price_function(hass: HomeAssistant, entry_id: str):
             translation_key="entry_not_loaded",
             translation_placeholders={"title": entry.title},
         )
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     resolved = entry_price_at(coordinator, entry)
     if resolved is None:
         raise ServiceValidationError(

@@ -223,6 +223,15 @@ A manual entry is also re-checked once a day in the background: if the operator'
 
 **Changing an entry later.** Open the entry's menu (⋮) under **Settings → Devices & Services** and choose **Reconfigure**: it runs the operator search, municipality and tariff selection again, for example after a move or a change of tariff product. The entry keeps its id and your levy and VAT options; the price entities are recreated for the new selection.
 
+## Removal
+
+1. **Settings → Devices & services → Swiss Electricity Price (ElCom)**, open the entry's menu (⋮) and choose **Delete**; repeat for every operator or tariff you added. The entities, their history and the device go with the entry, as do the national-levy and VAT numbers stored in its options and any repair notice it raised.
+2. Remove the integration itself in the **Marketplace** (or HACS), then restart Home Assistant. With a manual installation, delete `custom_components/elcom_tariffs` instead.
+
+## Quality scale
+
+The integration declares **Bronze** on the [Home Assistant integration quality scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/): a config flow with tests, unique ids for every entity, brand images, installation and removal instructions, a connection check before an entry is created, no duplicate entries, runtime data on the config entry, and the other Bronze rules. The tier is self-assessed, as it is for every custom integration; the per-rule status, including what is still open for Silver and Gold, is in `custom_components/elcom_tariffs/quality_scale.yaml`.
+
 ## Notes
 
 - Can be added multiple times, once per operator/municipality/energy-product/grid-product combination; setting one up a second time is rejected instead of silently creating a duplicate. Every entry's entity ids carry their own per-entry code (see [What it provides](#what-it-provides)), so several entries for the same operator do not collide.

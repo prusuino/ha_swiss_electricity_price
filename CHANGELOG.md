@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.0 — 2026-11-09
+
+- **Quality scale Bronze.** The integration keeps its coordinator in the config entry's runtime data, the README gained removal instructions and a quality-scale section, and the manifest declares the **bronze** tier. A test suite (tariff windows and the rate at a moment, record parser, validity selection, file decoding, config flow with operator search, product selection, duplicate, manual fallback, unreachable directory and reconfigure) runs on every push. No change to entities or configuration.
+
 ## 1.10.0 — 2026-11-08
 
 - **New: reconfigure an entry in place.** The entry's menu under **Settings → Devices & services** now offers *Reconfigure*, which runs the same steps as the setup: operator, municipality and tariff products, for example after a move. The entry keeps its id and the user's options; entities of a selection that stays keep their ids and history, entities of one that is replaced are recreated. A change that would duplicate another entry is refused.
