@@ -221,6 +221,8 @@ If neither the registered link nor a manual URL can be resolved, you're automati
 
 A manual entry is also re-checked once a day in the background: if the operator's own tariff file starts working, a repair notification (Settings → System → Repairs) tells you so, and it is withdrawn again should the link stop working or the entry be removed. Municipality and tariff products still need to be picked by hand, so switching over means removing and re-adding the integration entry rather than an automatic in-place upgrade — but the operator's link should then resolve on the first try.
 
+**Changing an entry later.** Open the entry's menu (⋮) under **Settings → Devices & Services** and choose **Reconfigure**: it runs the operator search, municipality and tariff selection again, for example after a move or a change of tariff product. The entry keeps its id and your levy and VAT options; the price entities are recreated for the new selection.
+
 ## Notes
 
 - Can be added multiple times, once per operator/municipality/energy-product/grid-product combination; setting one up a second time is rejected instead of silently creating a duplicate. Every entry's entity ids carry their own per-entry code (see [What it provides](#what-it-provides)), so several entries for the same operator do not collide.

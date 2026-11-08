@@ -44,7 +44,8 @@
     "abort": {
       "already_configured": "Questo gestore di rete è già configurato con lo stesso comune e gli stessi prodotti tariffari (oppure ha già una voce manuale).",
       "cannot_connect": "Non è stato possibile recuperare l'elenco degli operatori ElCom.",
-      "no_data": "L'elenco degli operatori ElCom non contiene alcun operatore per l'anno in corso."
+      "no_data": "L'elenco degli operatori ElCom non contiene alcun operatore per l'anno in corso.",
+      "reconfigure_successful": "La voce è stata aggiornata e l'integrazione ricaricata."
     },
     "error": {
       "no_matches": "Nessun operatore corrisponde a questa ricerca. Modifica il testo di ricerca sopra e invia di nuovo.",

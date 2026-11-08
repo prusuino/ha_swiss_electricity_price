@@ -22,6 +22,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
+from homeassistant.helpers import entity_registry as er
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     SelectOptionDict,
@@ -30,6 +31,10 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 from homeassistant.util import dt as dt_util
+
+# Whether the entry's update listener reloads the entry on a change (then a
+# reconfigure must not reload again, see _finish).
+_LISTENER_RELOADS = True
 
 from .const import (
     CONF_CANTONAL_LEVIES,
@@ -162,11 +167,67 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._operators: list[dict] = []
+        self._entry = None  # the ConfigEntry being reconfigured, if any
         self._matches: list[dict] = []
         self._selected: dict | None = None
         self._raw: dict | None = None
         self._verified: set[str] = set()
         self._location: dict | None = None
+
+    # ------------------------------------------------------------ reconfigure
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
+        """Change the entry with the same steps as its setup. The entry
+        keeps its id, so its entities keep their ids and history; the
+        entities of a station or location that is no longer selected are
+        removed and the reload creates the new ones."""
+        self._entry = self._get_reconfigure_entry()
+        return await self.async_step_user()
+
+    def _default(self, key: str, fallback: Any) -> Any:
+        """A form default: the entry's current value while reconfiguring."""
+        if self._entry is not None and key in self._entry.data:
+            return self._entry.data[key]
+        return fallback
+
+    def _abort_if_taken(self) -> None:
+        """Like _abort_if_unique_id_configured, except that the entry being
+        reconfigured may keep its own unique id."""
+        if self._entry is None or self.unique_id != self._entry.unique_id:
+            self._abort_if_unique_id_configured()
+
+    def _finish(self, *, title: str, data: dict[str, Any], options: dict[str, Any] | None = None):
+        """Create the entry, or update the one being reconfigured in place."""
+        if self._entry is None:
+            if options is not None:
+                return self.async_create_entry(title=title, data=data, options=options)
+            return self.async_create_entry(title=title, data=data)
+        entry = self._entry
+        if self.unique_id != entry.unique_id:
+            # Another station, location or operator: the entities of the old
+            # one would stay behind as orphans. Drop their registry rows; the
+            # reload creates the new entities, and one whose unique id comes
+            # back gets its entity id back as well.
+            registry = er.async_get(self.hass)
+            for reg_entry in list(er.async_entries_for_config_entry(registry, entry.entry_id)):
+                registry.async_remove(reg_entry.entity_id)
+        # Update, then let the entry's update listener reload it (Home
+        # Assistant asks integrations with a listener to do it that way).
+        # Where the listener only refreshes, the reload is scheduled here.
+        self.hass.config_entries.async_update_entry(
+            entry,
+            unique_id=self.unique_id,
+            title=title,
+            data=data,
+            options=self._reconfigured_options(entry, options),
+        )
+        if not _LISTENER_RELOADS:
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        return self.async_abort(reason="reconfigure_successful")
+
+    def _reconfigured_options(self, entry, options: dict[str, Any] | None) -> dict[str, Any]:
+        """The options to keep on a reconfigure: the user's current ones."""
+        return dict(entry.options)
 
     async def _async_verify_matches(self) -> None:
         """Live-check the direct links of the operators about to be shown
@@ -304,7 +365,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                     self._selected["id"], municipality, user_input[CONF_ENERGY_PRODUCT], user_input[CONF_GRID_PRODUCT]
                 )
             )
-            self._abort_if_unique_id_configured()
+            self._abort_if_taken()
             self._location = {
                 "title": _entry_title(self.hass, self._selected["name"], municipality, user_input[CONF_ENERGY_PRODUCT]),
                 "data": {
@@ -347,7 +408,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def _create_location_entry(self):
         assert self._location is not None
-        return self.async_create_entry(
+        return self._finish(
             title=self._location["title"], data=self._location["data"], options=self._location["options"]
         )
 
@@ -394,8 +455,8 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_time"
             else:
                 await self.async_set_unique_id(f"{self._selected['id']}_manual")
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
+                self._abort_if_taken()
+                return self._finish(
                     title=t("device_name_manual", self.hass, operator=self._selected["name"]),
                     data={
                         CONF_OPERATOR_ID: self._selected["id"],

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.0 — 2026-11-08
+
+- **New: reconfigure an entry in place.** The entry's menu under **Settings → Devices & services** now offers *Reconfigure*, which runs the same steps as the setup: operator, municipality and tariff products, for example after a move. The entry keeps its id and the user's options; entities of a selection that stays keep their ids and history, entities of one that is replaced are recreated. A change that would duplicate another entry is refused.
+
 ## 1.9.0 — 2026-11-07
 
 - **New: cantonal levies from the operator's file** (#8). The `cantonalTaxes` section of the tariff file is parsed; each entry gets a sensor `sensor.elcom_<operator>_<id>_cantonal_levy_<entry>` (Rp/kWh in force — Geneva's PCP has a high and a low rate — with canton, label and validity as attributes). Which entries belong on your bill, and which of those are billed **without VAT**, is chosen in a new setup step and in the Configure dialog; the chosen ones go into the combined price, the VAT-exempt ones after the VAT. Nothing is preselected, because operators fill this section very differently: a survey of all machine-readable files found cantonal taxes (VD, NE, JU, GE, ZH) but also the federal levies, municipal concession fees and lump sums under this heading — adding them unasked would double-count the federal levies for some users. A chosen entry that later disappears from the file is named in the repair issue, like a vanished product.

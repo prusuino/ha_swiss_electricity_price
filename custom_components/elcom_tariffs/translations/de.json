@@ -44,7 +44,8 @@
     "abort": {
       "already_configured": "Dieser Netzbetreiber ist mit derselben Gemeinde und denselben Tarifprodukten bereits eingerichtet (oder hat bereits einen manuellen Eintrag).",
       "cannot_connect": "Das ElCom-Betreiberverzeichnis konnte nicht abgerufen werden.",
-      "no_data": "Das ElCom-Betreiberverzeichnis enthält für das laufende Jahr keine Betreiber."
+      "no_data": "Das ElCom-Betreiberverzeichnis enthält für das laufende Jahr keine Betreiber.",
+      "reconfigure_successful": "Der Eintrag wurde aktualisiert und die Integration neu geladen."
     },
     "error": {
       "no_matches": "Kein Betreiber entspricht dieser Suche. Ändere den Suchtext oben und sende erneut ab.",
