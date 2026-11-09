@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 """Constants for the Swiss Electricity Tariffs (ElCom) integration."""
 DOMAIN = "elcom_tariffs"
 
@@ -79,3 +81,7 @@ DEFAULT_MANUAL_HIGH_WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr"]
 DEFAULT_NATIONAL_LEVIES_RP = 3.03
 DEFAULT_VAT_PERCENT = 8.1
 DEFAULT_VAT_EXEMPT_LEVIES_RP = 0.0
+
+# The integration's own version, shown on the service card. Read from the
+# manifest so that a release never needs to touch two places.
+VERSION: str = json.loads((Path(__file__).parent / "manifest.json").read_text(encoding="utf-8"))["version"]

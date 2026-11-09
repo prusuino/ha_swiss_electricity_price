@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.util import slugify
 
-from .const import CONF_ENERGY_PRODUCT, CONF_MUNICIPALITY, CONF_OPERATOR_NAME, DOMAIN
+from .const import CONF_ENERGY_PRODUCT, CONF_MUNICIPALITY, CONF_OPERATOR_NAME, DOMAIN, VERSION
 from .localization import t
 
 
@@ -23,6 +23,7 @@ def device_info(hass: HomeAssistant, entry: ConfigEntry) -> DeviceInfo:
         name = t("device_name_manual", hass, operator=operator)
     return DeviceInfo(
         identifiers={(DOMAIN, entry.entry_id)},
+        sw_version=VERSION,
         name=name,
         manufacturer=operator,
         model=t("model", hass),
