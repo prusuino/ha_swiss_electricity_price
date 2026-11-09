@@ -5,6 +5,7 @@ Configure field that ask for it, and the repair issue for an entry where
 nothing settles it."""
 from __future__ import annotations
 
+import logging
 from contextlib import contextmanager
 from unittest.mock import patch
 
@@ -292,6 +293,24 @@ def test_keys_carry_the_level_only_where_a_title_spans_levels():
     ]
     assign_keys(records)
     assert [r["key"] for r in records] == ["Abgabe | level 5", "Abgabe", "Abgabe | level 5 #2"]
+
+
+def test_the_unit_warning_is_for_the_own_municipality():
+    """A levy published in Rp instead of CHF is read as Rp for every
+    municipality, and warned about for the entry's own alone."""
+    tariffs = [
+        _grid("Haushalt", "Endkunde"),
+        _fee("Abgabe", "Endkunde", ("Musterwil", 1), ("Beispielingen", 70), ("Drittwil", 0.012)),
+    ]
+    with patch("custom_components.elcom_tariffs.coordinator._LOGGER") as log:
+        levies = _parse(tariffs, grid_product="Haushalt", municipality="Musterwil")
+    assert {name: levy["rp_kwh"] for name, levy in levies.items()} == {"Musterwil": 1, "Beispielingen": 0.7, "Drittwil": 1.2}
+    logged = [(call.args[0], call.args[2]) for call in log.log.call_args_list]
+    assert logged == [(logging.WARNING, "Musterwil"), (logging.DEBUG, "Beispielingen")]
+    # Without an entry (the setup dialog reads the file) nothing is a warning.
+    with patch("custom_components.elcom_tariffs.coordinator._LOGGER") as log:
+        _parse(tariffs, grid_product="Haushalt")
+    assert [call.args[0] for call in log.log.call_args_list] == [logging.DEBUG, logging.DEBUG]
 
 
 def test_labels_and_sensor_attributes():

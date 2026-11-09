@@ -628,18 +628,23 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         )
 
     @staticmethod
-    def _municipal_levy_rp(mname: str, value: float) -> float:
+    def _municipal_levy_rp(mname: str, value: float, own: bool = True) -> float:
         """A municipal levy in Rp/kWh from the figure in the operator's
         file. The format wants CHF/kWh, and no Swiss municipal levy
         reaches 10 Rp/kWh. Seven operators in the 11/2026 survey publish
         figures such as 70, 85 or 230 instead of 0.0070, 0.0085 or 0.023:
         the levy in hundredths of a Rappen. A figure between 0.1 and 10
-        can only be the levy in Rp."""
+        can only be the levy in Rp.
+
+        The reading is a warning where it is the entry's `own` levy; an
+        operator's file covers up to several hundred municipalities, and
+        what it says about the others goes to the debug log."""
+        level = logging.WARNING if own else logging.DEBUG
         if value > 10:
-            _LOGGER.warning("%s: municipal levy %s is not a CHF/kWh figure, reading it as Rp/kWh divided by 100", mname, value)
+            _LOGGER.log(level, "%s: municipal levy %s is not a CHF/kWh figure, reading it as Rp/kWh divided by 100", mname, value)
             return round(value / 100, 3)
         if value > 0.1:
-            _LOGGER.warning("%s: municipal levy %s is not a CHF/kWh figure, reading it as Rp/kWh", mname, value)
+            _LOGGER.log(level, "%s: municipal levy %s is not a CHF/kWh figure, reading it as Rp/kWh", mname, value)
             return round(value, 3)
         return round(value * 100, 3)
 
@@ -766,7 +771,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                         "tariff_name": name or "",
                         "customer_type": t.get("customerType"),
                         "voltage_level": t.get("customerVoltageLevel"),
-                        "rp_kwh": cls._municipal_levy_rp(mname, levy),
+                        "rp_kwh": cls._municipal_levy_rp(mname, levy, own=mname == municipality),
                         "base_price_chf": base.get("price", 0),
                         "valid_from": t.get("startDate"),
                         "valid_to": t.get("endDate"),
