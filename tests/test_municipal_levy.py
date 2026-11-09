@@ -1,7 +1,8 @@
 """Municipal levies a tariff file lists more than once for a municipality:
-which record applies (the grid product's customer type, the customer's own
-choice, several added up), the setup step and the Configure field that ask
-for it, and the repair issue for an entry where nothing settles it."""
+which record applies (the grid product's customer type or network level,
+the customer's own choice, several added up), the setup step and the
+Configure field that ask for it, and the repair issue for an entry where
+nothing settles it."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -32,6 +33,7 @@ from custom_components.elcom_tariffs.const import (
 from custom_components.elcom_tariffs.coordinator import ElcomTariffCoordinator, levy_issue_id
 from custom_components.elcom_tariffs.municipal_levy import (
     assign_keys,
+    choice_records,
     levy_attributes,
     needs_choice,
     offers_choice,
@@ -49,12 +51,13 @@ def _energy(name: str) -> dict:
             "prices": {"energy": [{"from": "00:00", "to": "00:00", "price": 0.12}], "base": {"price": 5.0}}}
 
 
-def _grid(name: str, customer_type: str | None) -> dict:
+def _grid(name: str, customer_type: str | None, level=None) -> dict:
     return {"tariffType": "grid", "tariffName": name, "customerType": customer_type, "startDate": "2020-01-01",
+            "customerVoltageLevel": level,
             "prices": {"energy": [{"from": "00:00", "to": "00:00", "price": 0.08}], "base": {"price": 9.0}}}
 
 
-def _fee(name: str, customer_type: str | None, *entries: tuple) -> dict:
+def _fee(name: str, customer_type: str | None, *entries: tuple, level=None) -> dict:
     """A regional_fees record; every entry is (municipality, price[, comment])."""
     taxes = []
     for municipality, price, *comment in entries:
@@ -63,7 +66,7 @@ def _fee(name: str, customer_type: str | None, *entries: tuple) -> dict:
             tax["municipalityComment"] = comment[0]
         taxes.append(tax)
     return {"tariffType": "regional_fees", "tariffName": name, "customerType": customer_type, "startDate": "2020-01-01",
-            "prices": {"municipalityTaxes": taxes}}
+            "customerVoltageLevel": level, "prices": {"municipalityTaxes": taxes}}
 
 
 # One levy record per grid product, tied to it by the customer type alone
@@ -186,6 +189,111 @@ def test_a_secondary_meter_levy_is_no_alternative():
     assert parsed["Beispielingen"]["rp_kwh"] == 0.1  # nothing but the secondary-meter levy
 
 
+# One levy record per network level under one title (the level written as
+# text in the levy records), and for one municipality two levies side by
+# side on every level.
+PER_LEVEL = [
+    _energy("Basic Energie"),
+    _grid("Haushalt", "Endkunde", 7),
+    _grid("Gewerbe MS", "Endkunde", 5),
+    _grid("Ohne Ebene", "Endkunde"),
+    _grid("Hochspannung", "Endkunde", 3),
+    _fee("Abgaben an das Gemeinwesen", "Endkunde", ("Musterwil", 0.005), ("Beispielingen", 0.008, "Energieabgabe"),
+         ("Beispielingen", 0.007, "Konzession"), level="5"),
+    _fee("Abgaben an das Gemeinwesen", "Endkunde", ("Musterwil", 0.014), ("Beispielingen", 0.008, "Energieabgabe"),
+         ("Beispielingen", 0.007, "Konzession"), level="7"),
+]
+
+
+@pytest.mark.parametrize(("grid_product", "rp_kwh", "record"), [
+    ("Haushalt", 1.4, "Abgaben an das Gemeinwesen | level 7"),
+    ("Gewerbe MS", 0.5, "Abgaben an das Gemeinwesen | level 5"),
+])
+def test_the_record_of_the_network_level_applies(grid_product, rp_kwh, record):
+    levy = _parse(PER_LEVEL, grid_product=grid_product)["Musterwil"]
+    assert levy["rp_kwh"] == rp_kwh
+    assert levy["resolved_by"] == "voltage_level"
+    assert levy["applied"] == [record] and levy["choices"] == [record]
+    assert not needs_choice(levy) and not offers_choice(levy)
+
+
+@pytest.mark.parametrize("grid_product", ["Ohne Ebene", "Hochspannung", None])
+def test_a_level_no_record_carries_leaves_all_records(grid_product):
+    levy = _parse(PER_LEVEL, grid_product=grid_product)["Musterwil"]
+    assert levy["rp_kwh"] == 1.4 and levy["resolved_by"] == "unresolved"
+    assert len(levy["choices"]) == 2
+    assert needs_choice(levy)
+
+
+def test_levies_side_by_side_are_offered_for_the_own_level_only():
+    levy = _parse(PER_LEVEL, grid_product="Haushalt")["Beispielingen"]
+    assert levy["resolved_by"] == "unresolved" and needs_choice(levy)
+    assert levy["choices"] == [
+        "Abgaben an das Gemeinwesen | level 7 | Energieabgabe", "Abgaben an das Gemeinwesen | level 7 | Konzession",
+    ]
+    assert levy["rp_kwh"] == 0.7
+    assert list(record_labels(choice_records(levy)).values()) == [
+        "Abgaben an das Gemeinwesen · Energieabgabe · 0.8 Rp/kWh", "Abgaben an das Gemeinwesen · Konzession · 0.7 Rp/kWh",
+    ]
+    chosen = _parse(PER_LEVEL, grid_product="Haushalt", municipality="Beispielingen", municipal_levies=levy["choices"])
+    assert chosen["Beispielingen"]["rp_kwh"] == 1.5 and chosen["Beispielingen"]["resolved_by"] == "selection"
+
+
+def test_a_choice_from_another_level_is_not_on_offer():
+    other = "Abgaben an das Gemeinwesen | level 5"
+    levy = _parse(PER_LEVEL, grid_product="Haushalt", municipality="Musterwil", municipal_levies=[other])["Musterwil"]
+    assert levy["missing"] == [other]
+    # One record on the own level: nothing to ask.
+    assert levy["rp_kwh"] == 1.4 and levy["resolved_by"] == "voltage_level"
+    assert not needs_choice(levy)
+    asked = _parse(PER_LEVEL, grid_product="Haushalt", municipality="Beispielingen",
+                   municipal_levies=["Abgaben an das Gemeinwesen | level 5 | Konzession"])["Beispielingen"]
+    assert asked["resolved_by"] == "unresolved" and needs_choice(asked)
+
+
+def test_a_record_without_a_level_counts_for_every_level():
+    tariffs = [
+        _grid("N7", "Endkunde", 7),
+        _fee("Konzessionsabgabe", "Endkunde", ("Musterwil", 0.009), level=5),
+        _fee("Konzessionsabgabe", "Endkunde", ("Musterwil", 0.012), level=7.0),
+        _fee("Klimarappen", "Endkunde", ("Musterwil", 0.005), level=0),
+    ]
+    levy = _parse(tariffs, grid_product="N7")["Musterwil"]
+    assert levy["choices"] == ["Konzessionsabgabe | level 7", "Klimarappen"]
+    assert levy["resolved_by"] == "unresolved" and needs_choice(levy)
+
+
+def test_the_customer_type_tells_within_the_network_level():
+    tariffs = [
+        _grid("Haushalt", "Haushalt", 7),
+        _fee("Abgabe MS", "Haushalt", ("Musterwil", 0.004), level=5),
+        _fee("Abgabe Haushalt", "Haushalt", ("Musterwil", 0.012), level=7),
+        _fee("Abgabe Gewerbe", "Gewerbe", ("Musterwil", 0.009), level=7),
+    ]
+    levy = _parse(tariffs, grid_product="Haushalt")["Musterwil"]
+    assert levy["rp_kwh"] == 1.2 and levy["resolved_by"] == "customer_type"
+    assert levy["applied"] == ["Abgabe Haushalt"]
+
+
+def test_keys_carry_the_level_only_where_a_title_spans_levels():
+    records = [
+        {"tariff_name": "Abgabe", "voltage_level": 7, "rp_kwh": 1.0},
+        {"tariff_name": "Abgabe", "voltage_level": "7", "rp_kwh": 2.0},
+        {"tariff_name": "Abgabe NE5", "voltage_level": 5, "rp_kwh": 3.0},
+    ]
+    assign_keys(records)
+    assert [r["key"] for r in records] == ["Abgabe", "Abgabe #2", "Abgabe NE5"]
+    labels = record_labels(records)
+    assert labels["Abgabe NE5"] == "Abgabe NE5 · network level 5 · 3 Rp/kWh"
+    records = [
+        {"tariff_name": "Abgabe", "voltage_level": 5, "rp_kwh": 1.0},
+        {"tariff_name": "Abgabe", "voltage_level": None, "rp_kwh": 2.0},
+        {"tariff_name": "Abgabe", "voltage_level": 5, "rp_kwh": 3.0},
+    ]
+    assign_keys(records)
+    assert [r["key"] for r in records] == ["Abgabe | level 5", "Abgabe", "Abgabe | level 5 #2"]
+
+
 def test_labels_and_sensor_attributes():
     levy = _parse(PER_PRODUCT, grid_product="NS")["Musterwil"]
     labels = record_labels(levy["records"])
@@ -194,6 +302,9 @@ def test_labels_and_sensor_attributes():
     assert attributes["tariff_record"] == "Gemeindeabgabe NS"
     assert attributes["resolved_by"] == "customer_type"
     assert [r["applied"] for r in attributes["records"]] == [True, False, False]
+    by_level = levy_attributes(_parse(PER_LEVEL, grid_product="Haushalt")["Musterwil"])
+    assert by_level["resolved_by"] == "voltage_level"
+    assert [(r["voltage_level"], r["applied"]) for r in by_level["records"]] == [("5", False), ("7", True)]
     single = _parse([_fee("Gemeindeabgaben", None, ("Musterwil", 0.005))])["Musterwil"]
     assert "records" not in levy_attributes(single)
     assert levy_attributes({"rp_kwh": 0.5}) == {}
@@ -229,7 +340,7 @@ def fake_network():
         yield
 
 
-async def _to_location(hass: HomeAssistant, grid_product: str):
+async def _to_location(hass: HomeAssistant, grid_product: str, municipality: str = "Musterwil"):
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"operator_search": "Muster", CONF_OPERATOR_ID: OPERATOR_ID, "manual_url": ""}
@@ -237,7 +348,7 @@ async def _to_location(hass: HomeAssistant, grid_product: str):
     assert result["step_id"] == "location"
     return await hass.config_entries.flow.async_configure(
         result["flow_id"],
-        {CONF_MUNICIPALITY: "Musterwil", CONF_ENERGY_PRODUCT: "Basic Energie", CONF_GRID_PRODUCT: grid_product, CONF_GRID_INCLUDES_LEVIES: True},
+        {CONF_MUNICIPALITY: municipality, CONF_ENERGY_PRODUCT: "Basic Energie", CONF_GRID_PRODUCT: grid_product, CONF_GRID_INCLUDES_LEVIES: True},
     )
 
 
@@ -266,6 +377,30 @@ async def test_setup_does_not_ask_when_the_grid_product_tells(hass: HomeAssistan
     entry = result["result"]
     assert _levy(entry)["rp_kwh"] == 1.75
     assert _issue(hass, entry) is None
+
+
+async def test_setup_with_levels_lists_the_own_level(hass: HomeAssistant, enable_custom_integrations) -> None:
+    """One record on the grid product's level: no question. Two levies side
+    by side on it: the step lists those two, not the other level's."""
+    with _network({"tariffs": PER_LEVEL}):
+        result = await _to_location(hass, "Haushalt")
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        await hass.async_block_till_done()
+        entry = result["result"]
+        assert _levy(entry)["rp_kwh"] == 1.4
+        assert _issue(hass, entry) is None
+
+        result = await _to_location(hass, "Gewerbe MS", "Beispielingen")
+        assert result["type"] is FlowResultType.FORM and result["step_id"] == "municipal"
+        assert result["description_placeholders"]["count"] == "2"
+        chosen = ["Abgaben an das Gemeinwesen | level 5 | Energieabgabe", "Abgaben an das Gemeinwesen | level 5 | Konzession"]
+        offered = result["data_schema"].schema[CONF_MUNICIPAL_LEVIES].config["options"]
+        assert [option["value"] for option in offered] == chosen
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_MUNICIPAL_LEVIES: chosen})
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_MUNICIPAL_LEVIES] == chosen
+        await hass.async_block_till_done()
+        assert result["result"].runtime_data.data["municipalities"]["Beispielingen"]["rp_kwh"] == 1.5
 
 
 async def test_setup_asks_when_nothing_tells(hass: HomeAssistant, enable_custom_integrations, fake_network) -> None:

@@ -74,7 +74,7 @@ from .directory import (
     async_verify_direct_links,
 )
 from .localization import t
-from .municipal_levy import needs_choice, offers_choice, record_labels
+from .municipal_levy import choice_records, needs_choice, offers_choice, record_labels
 from .tariff_period import select_current_tariffs
 
 _LOGGER = logging.getLogger(__name__)
@@ -153,7 +153,8 @@ def _municipal_selector(levy: dict) -> SelectSelector:
     return SelectSelector(
         SelectSelectorConfig(
             options=[
-                SelectOptionDict(value=key, label=label) for key, label in record_labels(levy["records"]).items()
+                SelectOptionDict(value=key, label=label)
+                for key, label in record_labels(choice_records(levy)).items()
             ],
             multiple=True,
             mode=SelectSelectorMode.LIST,
@@ -446,7 +447,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
     def _kept_municipal_levies(self, levy: dict) -> list[str]:
         """The records the entry being reconfigured has chosen, as far as
         this municipality still has them."""
-        keys = [record["key"] for record in levy["records"]]
+        keys = [record["key"] for record in choice_records(levy)]
         return [key for key in self._default(CONF_MUNICIPAL_LEVIES, []) or [] if key in keys]
 
     async def _async_after_municipal(self):
@@ -459,14 +460,15 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
         """Only where the file lists several municipal levies for the chosen
         municipality and the grid product does not tell which one applies:
         the customer ticks the one on the bill, or several that add up.
-        Nothing is preselected for a new entry — a record per voltage
-        level and levies that are charged side by side look the same in
-        the file."""
+        Nothing is preselected for a new entry — a record per consumption
+        band and levies that are charged side by side look the same in
+        the file. Listed are the records of the grid product's network
+        level."""
         assert self._selected is not None and self._raw is not None and self._location is not None
         data = self._location["data"]
         levy = _municipal_levy(self._raw, data[CONF_MUNICIPALITY], data[CONF_GRID_PRODUCT])
         assert levy is not None
-        labels = record_labels(levy["records"])
+        labels = record_labels(choice_records(levy))
         errors: dict[str, str] = {}
         if user_input is not None:
             chosen = [key for key in labels if key in user_input.get(CONF_MUNICIPAL_LEVIES, [])]
@@ -639,7 +641,7 @@ class ElcomTariffOptionsFlow(OptionsFlow):
         # The records of the entry's municipality, where it has several to
         # choose between (see municipal_levy.py).
         levy = data.get("municipalities", {}).get(entry.data.get(CONF_MUNICIPALITY) or "")
-        levy_labels = record_labels(levy["records"]) if selectable and offers_choice(levy) else {}
+        levy_labels = record_labels(choice_records(levy)) if selectable and offers_choice(levy) else {}
 
         if user_input is not None:
             options = {

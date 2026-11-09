@@ -204,17 +204,18 @@ How to tell: take one bill and look at the energy-dependent grid line. If the bi
 
 ### Several municipal levies for one municipality
 
-Most operators publish one municipal levy per municipality. Some publish several (20 of the 183 machine-readable files in the 11/2026 survey), and they do not all mean the same by it:
+Most operators publish one municipal levy per municipality. Some publish several (25 of the 203 machine-readable files checked in 11/2026), and they do not all mean the same by it:
 
 - **One levy per grid product** — for example 1.75 Rp/kWh for low-voltage customers up to 100 000 kWh a year, 1.25 above that and 0.8 at medium voltage. Where the levy record carries the same customer type as a grid tariff product, the integration picks the record of your grid product by itself.
-- **One levy per voltage level or consumption band, named only in the record's title** ("NS" / "MS", "< 50 MWh"). Nothing in the file links such a record to a grid product.
+- **One levy per network level** — for example 1.4 Rp/kWh on network level 7 (low voltage, where households are) and 0.5 on level 5 (medium voltage). The file states the level for every levy record and for every grid tariff product, so only the records of your grid product's level count. Where that leaves one rate, it is the levy.
+- **One levy per consumption band, named only in the record's title** ("< 50 MWh"). Nothing in the file links such a record to a grid product.
 - **Several levies charged side by side** — a concession fee, a levy for public lighting, one for energy efficiency. They add up.
 
-In the last two cases only your bill tells, so the setup asks: the records are listed with their rates, and you tick the one on your bill — several if the bill shows them side by side; they are added up. The same list is in the **Configure** dialog, where the choice can be changed at any time and also overrides the automatic pick. With nothing ticked, the integration decides by itself as described above.
+In the last two cases only your bill tells, so the setup asks: the records of your network level are listed with their rates, and you tick the one on your bill — several if the bill shows them side by side; they are added up. The same list is in the **Configure** dialog, where the choice can be changed at any time and also overrides the automatic pick. With nothing ticked, the integration decides by itself as described above.
 
-The municipal levy sensor says where its figure comes from: `tariff_record` and `customer_type` name the applied record, `resolved_by` is `single_record` (the file has one, or all of them have the same rate), `customer_type` (the record of your grid product), `selection` (your choice) or `unresolved`, and `records` lists everything the file has for the municipality with its rate.
+The municipal levy sensor says where its figure comes from: `tariff_record` and `customer_type` name the applied record, `resolved_by` is `single_record` (the file has one, or all of them have the same rate), `customer_type` (the record of your grid product), `voltage_level` (the one rate on your grid product's network level), `selection` (your choice) or `unresolved`, and `records` lists everything the file has for the municipality with its rate and network level.
 
-Entries created before 1.12.0: until then the integration used whichever record came last in the file — for a household often the medium-voltage one, which is the lowest. Where the grid product names the record, the levy is corrected by itself after the update, so the municipal levy and the combined price may **change, typically upwards**, to what the bill shows. Where nothing tells the records apart, the value stays as it was and a **repair issue** (Settings → System → Repairs) lists the records and asks you to choose in the Configure dialog. The same issue appears when a record you chose is later dropped from the file or renamed by the operator.
+Entries created before 1.12.0: until then the integration used whichever record came last in the file — for a household often the medium-voltage one, which is the lowest. Where the grid product names the record — by its customer type or, from 1.12.1, its network level — the levy is corrected by itself after the update, so the municipal levy and the combined price may **change, typically upwards**, to what the bill shows. Where nothing tells the records apart, the value stays as it was and a **repair issue** (Settings → System → Repairs) lists the records and asks you to choose in the Configure dialog. The same issue appears when a record you chose is later dropped from the file or renamed by the operator.
 
 ### Cantonal levies and amounts exempt from VAT
 

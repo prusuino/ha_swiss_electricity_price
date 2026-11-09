@@ -62,7 +62,7 @@ from .const import (
 )
 from .directory import async_fetch_operator_url, async_resolve_tariff_url
 from .localization import t
-from .municipal_levy import applied_text, assign_keys, needs_choice, record_labels
+from .municipal_levy import applied_text, assign_keys, choice_records, needs_choice, record_labels
 from .municipal_levy import resolve as resolve_municipal_levy
 from .tariff_period import (
     is_secondary_meter_fee,
@@ -553,8 +553,8 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         """Raise (or withdraw) the repair issue asking which municipal levy
         is on the bill: the file lists several for the chosen municipality
         and neither the chosen grid product nor an earlier choice settles
-        it. The price keeps the levy it had (the file's last record) until
-        the customer chooses in the Configure dialog."""
+        it. Until the customer chooses in the Configure dialog, the price
+        uses the last of the records on offer."""
         entry = self.config_entry
         municipality = entry.data.get(CONF_MUNICIPALITY) or ""
         levy = data["municipalities"].get(municipality)
@@ -572,7 +572,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             translation_placeholders={
                 "operator": entry.data[CONF_OPERATOR_NAME],
                 "municipality": municipality,
-                "records": "; ".join(record_labels(levy["records"]).values()),
+                "records": "; ".join(record_labels(choice_records(levy)).values()),
                 "applied": applied_text(levy),
             },
         )
@@ -717,9 +717,9 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         preview).
 
         A municipality can have a levy in several records; which of them
-        apply is resolved with the customer type of `grid_product` and,
-        for `municipality` alone, with the customer's own choice
-        `municipal_levies` (see municipal_levy.py)."""
+        apply is resolved with the customer type and the network level of
+        `grid_product` and, for `municipality` alone, with the customer's
+        own choice `municipal_levies` (see municipal_levy.py)."""
         energy_tariffs: dict[str, dict] = {}
         grid_tariffs: dict[str, dict] = {}
         metering_tariffs: dict[str, dict] = {}
@@ -765,6 +765,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                     target.setdefault(mname, []).append({
                         "tariff_name": name or "",
                         "customer_type": t.get("customerType"),
+                        "voltage_level": t.get("customerVoltageLevel"),
                         "rp_kwh": cls._municipal_levy_rp(mname, levy),
                         "base_price_chf": base.get("price", 0),
                         "valid_from": t.get("startDate"),
@@ -779,12 +780,15 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         # still gets that one rather than none.
         for mname, records in secondary_meter_records.items():
             levy_records.setdefault(mname, records)
-        grid_customer_type = (grid_tariffs.get(grid_product or "") or {}).get("customer_type")
+        grid = grid_tariffs.get(grid_product or "") or {}
         municipalities: dict[str, dict] = {}
         for mname, records in levy_records.items():
             assign_keys(records)
             municipalities[mname] = resolve_municipal_levy(
-                records, grid_customer_type, municipal_levies if mname == municipality else None
+                records,
+                grid.get("customer_type"),
+                municipal_levies if mname == municipality else None,
+                grid.get("voltage_level"),
             )
         return {
             "energy": energy_tariffs,
@@ -848,6 +852,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             "base_price_chf_month": base.get("price", 0),
             "base_price_unit": base.get("priceUnit"),
             "customer_type": t.get("customerType"),
+            "voltage_level": t.get("customerVoltageLevel"),
             "valid_from": t.get("startDate"),
             "valid_to": t.get("endDate"),
             "schedule": schedule,

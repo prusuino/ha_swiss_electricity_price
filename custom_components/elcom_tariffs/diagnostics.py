@@ -24,6 +24,7 @@ def _product_summary(products: dict[str, dict]) -> dict[str, Any]:
             "base_price": d.get("base_price_chf_month"),
             "base_price_unit": d.get("base_price_unit"),
             "customer_type": d.get("customer_type"),
+            "voltage_level": d.get("voltage_level"),
             "valid_from": d.get("valid_from"),
             "valid_to": d.get("valid_to"),
             "schedule": d.get("schedule"),
