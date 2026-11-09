@@ -32,6 +32,7 @@ from .device import device_info, entity_id_prefix
 from .levies import Levies, entry_levies
 from .levies import level_rp as _level_rp
 from .localization import t, tariff_level_text
+from .municipal_levy import levy_attributes
 from .price_schedule import (
     combined_price_at,
     level_at,
@@ -608,6 +609,9 @@ class ElcomMunicipalityLevySensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
             "valid_from": d.get("valid_from"),
             "valid_to": d.get("valid_to"),
             "comment": d.get("comment"),
+            # Which record of the file this is, how it was found and,
+            # where the file has several for the municipality, all of them.
+            **levy_attributes(d),
         }
 
 

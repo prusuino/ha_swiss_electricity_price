@@ -46,6 +46,7 @@ from .const import (
     CONF_MANUAL_HIGH_TO,
     CONF_MANUAL_HIGH_WEEKDAYS,
     CONF_MANUAL_LOW_RP,
+    CONF_MUNICIPAL_LEVIES,
     CONF_MUNICIPALITY,
     CONF_NEXT_PERIOD_NOTIFIED,
     CONF_OPERATOR_ID,
@@ -61,6 +62,8 @@ from .const import (
 )
 from .directory import async_fetch_operator_url, async_resolve_tariff_url
 from .localization import t
+from .municipal_levy import applied_text, assign_keys, needs_choice, record_labels
+from .municipal_levy import resolve as resolve_municipal_levy
 from .tariff_period import (
     is_secondary_meter_fee,
     select_current_tariffs,
@@ -162,6 +165,13 @@ def selection_issue_id(entry: ConfigEntry) -> str:
     """Repair-issue id raised when the chosen product or municipality is
     no longer in the operator's file (see _async_check_selection)."""
     return f"selection_missing_{entry.entry_id}"
+
+
+def levy_issue_id(entry: ConfigEntry) -> str:
+    """Repair-issue id raised when the file lists several municipal levies
+    for the chosen municipality and nothing tells which one applies (see
+    _async_check_municipal_levy)."""
+    return f"municipal_levy_ambiguous_{entry.entry_id}"
 
 
 def _parse_hhmm(value: str) -> int:
@@ -442,7 +452,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                     "next" if selection == "upcoming" else "most recent",
                 )
 
-            parsed = self._parse_tariff_records(tariffs)
+            parsed = self._parse_for_entry(tariffs)
             energy_tariffs = parsed["energy"]
             grid_tariffs = parsed["grid"]
             metering_tariffs = parsed["metering"]
@@ -461,7 +471,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             if selection == "current":
                 upcoming, upcoming_start = select_upcoming_tariffs(raw.get("tariffs", []), today)
                 if upcoming:
-                    upcoming_parsed = self._parse_tariff_records(upcoming)
+                    upcoming_parsed = self._parse_for_entry(upcoming)
                     if upcoming_parsed["energy"] or upcoming_parsed["grid"]:
                         next_period = {"valid_from": upcoming_start.isoformat(), **upcoming_parsed}
 
@@ -490,6 +500,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                 "next_period": next_period,
             }
             self._async_check_selection(data)
+            self._async_check_municipal_levy(data)
             self._async_notify_next_period(data)
             return data
         # ValueError covers time windows whose from/to are not HH:MM strings
@@ -535,6 +546,35 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             severity=ir.IssueSeverity.WARNING,
             translation_key="selection_missing",
             translation_placeholders={"operator": entry.data[CONF_OPERATOR_NAME], "missing": ", ".join(missing)},
+        )
+
+    @callback
+    def _async_check_municipal_levy(self, data: dict) -> None:
+        """Raise (or withdraw) the repair issue asking which municipal levy
+        is on the bill: the file lists several for the chosen municipality
+        and neither the chosen grid product nor an earlier choice settles
+        it. The price keeps the levy it had (the file's last record) until
+        the customer chooses in the Configure dialog."""
+        entry = self.config_entry
+        municipality = entry.data.get(CONF_MUNICIPALITY) or ""
+        levy = data["municipalities"].get(municipality)
+        if not needs_choice(levy):
+            ir.async_delete_issue(self.hass, DOMAIN, levy_issue_id(entry))
+            return
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            levy_issue_id(entry),
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="municipal_levy_ambiguous",
+            translation_placeholders={
+                "operator": entry.data[CONF_OPERATOR_NAME],
+                "municipality": municipality,
+                "records": "; ".join(record_labels(levy["records"]).values()),
+                "applied": applied_text(levy),
+            },
         )
 
     @callback
@@ -652,17 +692,40 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
             parsed["tariff_name"] = record.get("tariffName")
             cantonal[name] = parsed
 
+    def _parse_for_entry(self, tariffs: list[dict]) -> dict:
+        """One set of records as this entry sees it: the municipal levies
+        resolved with its grid product and its own choice of records."""
+        data = self.config_entry.data
+        return self._parse_tariff_records(
+            tariffs,
+            grid_product=data.get(CONF_GRID_PRODUCT),
+            municipality=data.get(CONF_MUNICIPALITY),
+            municipal_levies=data.get(CONF_MUNICIPAL_LEVIES),
+        )
+
     @classmethod
-    def _parse_tariff_records(cls, tariffs: list[dict]) -> dict:
+    def _parse_tariff_records(
+        cls,
+        tariffs: list[dict],
+        *,
+        grid_product: str | None = None,
+        municipality: str | None = None,
+        municipal_levies: list[str] | None = None,
+    ) -> dict:
         """Energy/grid products, metering fees, municipality and cantonal
         levies of one set of records (today's set, or next year's for the
-        preview)."""
+        preview).
+
+        A municipality can have a levy in several records; which of them
+        apply is resolved with the customer type of `grid_product` and,
+        for `municipality` alone, with the customer's own choice
+        `municipal_levies` (see municipal_levy.py)."""
         energy_tariffs: dict[str, dict] = {}
         grid_tariffs: dict[str, dict] = {}
         metering_tariffs: dict[str, dict] = {}
-        municipalities: dict[str, dict] = {}
+        levy_records: dict[str, list[dict]] = {}
         cantonal: dict[str, dict] = {}
-        secondary_meter_municipalities: dict[str, dict] = {}
+        secondary_meter_records: dict[str, list[dict]] = {}
         for t in tariffs:
             ttype = t.get("tariffType")
             name = t.get("tariffName", "")
@@ -695,9 +758,13 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                     base = m.get("municipalityBase", {})
                     # A levy that applies to secondary meters only is
                     # kept apart so it cannot replace the regular one.
-                    target = secondary_meter_municipalities if is_secondary_meter_fee(t) else municipalities
+                    target = secondary_meter_records if is_secondary_meter_fee(t) else levy_records
                     levy = (energy[0].get("price") or 0.0) if energy else 0.0
-                    target[mname] = {
+                    # Every record is kept: a municipality can appear in
+                    # several (per customer group, or levies that add up).
+                    target.setdefault(mname, []).append({
+                        "tariff_name": name or "",
+                        "customer_type": t.get("customerType"),
                         "rp_kwh": cls._municipal_levy_rp(mname, levy),
                         "base_price_chf": base.get("price", 0),
                         "valid_from": t.get("startDate"),
@@ -706,12 +773,19 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                         # yearly cap ("Deckelung in CHF/a: 24") on levies
                         # it publishes as an implausible per-kWh figure.
                         "comment": m.get("municipalityComment") or None,
-                    }
+                    })
                 cls._parse_cantonal_levies(t, cantonal)
         # A municipality that has nothing but a secondary-meter levy
         # still gets that one rather than none.
-        for mname, levy in secondary_meter_municipalities.items():
-            municipalities.setdefault(mname, levy)
+        for mname, records in secondary_meter_records.items():
+            levy_records.setdefault(mname, records)
+        grid_customer_type = (grid_tariffs.get(grid_product or "") or {}).get("customer_type")
+        municipalities: dict[str, dict] = {}
+        for mname, records in levy_records.items():
+            assign_keys(records)
+            municipalities[mname] = resolve_municipal_levy(
+                records, grid_customer_type, municipal_levies if mname == municipality else None
+            )
         return {
             "energy": energy_tariffs,
             "grid": grid_tariffs,

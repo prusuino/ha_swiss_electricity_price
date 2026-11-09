@@ -50,6 +50,12 @@ CONF_VAT_PERCENT = "vat_percent"
 # at setup and in the Configure dialog; absent on entries created before
 # 1.9.0, which therefore keep their price as it was.
 CONF_CANTONAL_LEVIES = "cantonal_levies"
+# Where the file lists more than one municipal levy for the chosen
+# municipality: the keys of the records on this customer's bill (see
+# municipal_levy.py), added up. Entry data, chosen at setup and in the
+# Configure dialog. Absent or empty: the record is found by itself (the
+# only one, or the one with the customer type of the chosen grid product).
+CONF_MUNICIPAL_LEVIES = "municipal_levies"
 CONF_CANTONAL_LEVIES_VAT_EXEMPT = "cantonal_levies_vat_exempt"
 # An amount in Rp/kWh added after VAT (a cantonal tax the operator's
 # file does not carry); option, adjustable, default 0.

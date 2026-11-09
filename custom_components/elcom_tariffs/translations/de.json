@@ -20,6 +20,13 @@
           "grid_includes_levies": "Netztarif enthält die Bundesabgaben bereits"
         }
       },
+      "municipal": {
+        "title": "{operator}: Gemeindeabgabe von {municipality}",
+        "description": "Die Tarifdatei von {operator} führt für {municipality} {count} Datensätze mit Gemeindeabgaben, und das gewählte Netz-Tarifprodukt sagt nicht, welcher davon gilt. Hake den an, der auf deiner Rechnung steht. Betreiber nutzen mehrere Datensätze für zwei verschiedene Dinge: eine Abgabe je Spannungsebene oder Verbrauchsstufe (dann gilt für dich genau eine) oder getrennte Abgaben, die alle nebeneinander verrechnet werden (dann hake jede an, die auf deiner Rechnung steht; sie werden addiert). Die Auswahl lässt sich später im Dialog «Konfigurieren» ändern.",
+        "data": {
+          "municipal_levies": "Gemeindeabgaben auf meiner Rechnung"
+        }
+      },
       "cantonal": {
         "title": "{operator}: kantonale Abgaben",
         "description": "Die Tarifdatei von {operator} führt {count} Einträge unter kantonalen Abgaben. Hake die an, die auf deiner Rechnung stehen – sie werden dem kombinierten Preis zugerechnet – und davon jene, die deine Rechnung ohne MWST ausweist (eine kantonale Steuer wie die 0.6 Rp/kWh im Kanton Waadt wird ohne MWST verrechnet, eine kantonale Gebühr mit). Nichts ist vorausgewählt: Betreiber legen unter diesem Titel Verschiedenes ab, manche sogar die Bundesabgaben, die der vorherige Schritt bereits abdeckt – diese zusätzlich anzuhaken würde sie doppelt zählen. Beide Auswahlen lassen sich später im Dialog «Konfigurieren» ändern; jeder Eintrag erhält zudem einen eigenen Sensor.",
@@ -50,7 +57,8 @@
     "error": {
       "no_matches": "Kein Betreiber entspricht dieser Suche. Ändere den Suchtext oben und sende erneut ab.",
       "manual_url_needs_operator": "Es wurde eine manuelle URL eingegeben, aber kein Betreiber ausgewählt. Bitte wähle zusätzlich den Betreiber aus, zu dem diese URL gehört.",
-      "invalid_time": "Bitte Uhrzeiten im Format HH:MM eingeben (z.B. 06:00)."
+      "invalid_time": "Bitte Uhrzeiten im Format HH:MM eingeben (z.B. 06:00).",
+      "choose_levy": "Hake mindestens eine Gemeindeabgabe an."
     }
   },
   "options": {
@@ -61,13 +69,14 @@
           "municipality": "Gemeinde",
           "energy_product": "Energie-Tarifprodukt",
           "grid_product": "Netz-Tarifprodukt",
+          "municipal_levies": "Gemeindeabgaben auf meiner Rechnung",
           "cantonal_levies": "Kantonale Abgaben auf meiner Rechnung",
           "cantonal_levies_vat_exempt": "Davon ohne MWST verrechnet",
           "national_levies_rp": "Nationale Stromabgaben (Rp/kWh)",
           "vat_percent": "MWST-Satz (%)",
           "vat_exempt_levies_rp": "Abgaben ohne MWST (Rp/kWh, nach der MWST addiert)"
         },
-        "description": "Nationale Abgaben, MWST-Satz und der Betrag ohne MWST gelten für die kombinierten Preis-Sensoren. Bei einem Eintrag auf Basis der Tarifdatei von {operator} können Gemeinde sowie Energie- und Netz-Tarifprodukt hier aus der heutigen Datei neu gewählt werden: Betreiber benennen Produkte um oder bauen ihre Datei von einem Jahr zum nächsten um, und die kombinierten Preis-Sensoren bleiben so lange nicht verfügbar, bis die aktuellen Namen gewählt sind. Führt die Datei kantonale Abgaben, hake die auf deiner Rechnung an und davon jene ohne MWST. Jede dieser Änderungen lädt den Eintrag neu; Entitäts-IDs und Verlauf bleiben erhalten."
+        "description": "Nationale Abgaben, MWST-Satz und der Betrag ohne MWST gelten für die kombinierten Preis-Sensoren. Bei einem Eintrag auf Basis der Tarifdatei von {operator} können Gemeinde sowie Energie- und Netz-Tarifprodukt hier aus der heutigen Datei neu gewählt werden: Betreiber benennen Produkte um oder bauen ihre Datei von einem Jahr zum nächsten um, und die kombinierten Preis-Sensoren bleiben so lange nicht verfügbar, bis die aktuellen Namen gewählt sind. Führt die Datei kantonale Abgaben, hake die auf deiner Rechnung an und davon jene ohne MWST. Führt die Datei für deine Gemeinde mehrere Gemeindeabgaben, hake die auf deiner Rechnung an – sie werden addiert; ohne Auswahl gilt der Datensatz, der zum Netz-Tarifprodukt gehört, sofern die Datei das erkennen lässt. Jede dieser Änderungen lädt den Eintrag neu; Entitäts-IDs und Verlauf bleiben erhalten."
       }
     },
     "error": {
@@ -82,6 +91,10 @@
     "selection_missing": {
       "title": "{operator}: gewähltes Tarifprodukt oder Gemeinde nicht mehr in der Tarifdatei",
       "description": "Die Tarifdatei von {operator} enthält nicht mehr: {missing}. Der Betreiber hat es umbenannt oder entfernt, darum sind die kombinierten Preis-Sensoren, die Tarifstufe und der Hochtarif-Sensor dieses Eintrags nicht verfügbar. Öffne den Dialog «Konfigurieren» des Eintrags und wähle die aktuellen Namen aus der Liste; der Eintrag wird neu geladen und behält Entitäts-IDs und Verlauf."
+    },
+    "municipal_levy_ambiguous": {
+      "title": "{operator}: mehrere Gemeindeabgaben für {municipality} – bitte auswählen",
+      "description": "Die Tarifdatei von {operator} führt für {municipality} mehrere Datensätze mit Gemeindeabgaben: {records}. Aus der Datei geht nicht hervor, welcher zu deinem Netz-Tarifprodukt gehört, oder ein früher gewählter Datensatz ist nicht mehr in der Datei. Im Moment rechnet der Preis mit: {applied}. Öffne den Dialog «Konfigurieren» des Eintrags und hake die Abgabe an, die auf deiner Rechnung steht – mehrere, wenn deine Rechnung sie nebeneinander ausweist; sie werden addiert. Der Eintrag wird neu geladen und behält Entitäts-IDs und Verlauf."
     }
   },
   "services": {

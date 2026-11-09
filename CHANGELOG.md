@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.12.0 — 2026-11-09
+
+- **Fixed: wrong municipal levy where the operator's file has several for one municipality** (#9, reported by @delixfe). A tariff file can carry any number of municipal levy records, and the integration kept whichever came last for a municipality — in the reported case the medium-voltage record (0.8 Rp/kWh) instead of the one for low-voltage customers (1.75 Rp/kWh). Every record is kept now, and the levy of an entry is settled in this order: your own choice; the only record, or several with one and the same rate; the record that carries the same customer type as the chosen grid tariff product. A check against all machine-readable files found several different levy records for one municipality in 20 of 183; for eight of those operators the grid product names the record (for six of them with every grid product).
+- **New: choose the municipal levies on your bill.** Where the file does not tell — levies named by voltage level only in their title, or several levies that are all charged side by side — a new setup step lists the records with their rates; the ticked ones are added up. The same list is in the Configure dialog, where a choice also overrides the automatic pick. Reconfigure keeps a choice on offer.
+- **New: repair issue for an ambiguous municipal levy.** An existing entry whose levy cannot be settled keeps the value it had and gets a repair issue that lists the records and points to the Configure dialog; it is withdrawn once a choice is made, and comes back if a chosen record is dropped from the file or renamed.
+- **New attributes on the municipal levy sensor**: `tariff_record`, `customer_type` and `resolved_by` (`single_record`, `customer_type`, `selection`, `unresolved`), plus `records` with every record of the municipality where the file has more than one. The diagnostics download includes the same for the entry's municipality.
+- **Fixed: Reconfigure reloads the entry.** A changed operator, municipality or product took effect only after the next restart or manual reload.
+- **Existing entries**: where the grid product names the record, the municipal levy and with it the combined price are corrected without any action — they can change, typically upwards, to the figure on the bill. Everything else is unchanged; entity ids are kept.
+
 ## 1.11.1 — 2026-11-09
 
 - **Version on the service card.** The integration's version now appears on its service card under Settings → Devices & services, where the entities are listed.

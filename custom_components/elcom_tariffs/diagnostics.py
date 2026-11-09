@@ -13,7 +13,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, USER_AGENT
+from .const import CONF_MUNICIPALITY, DOMAIN, USER_AGENT
 
 
 def _product_summary(products: dict[str, dict]) -> dict[str, Any]:
@@ -62,6 +62,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "metering": data.get("metering", {}),
             "municipality_count": len(municipalities),
             "municipality_names_sample": sorted(municipalities)[:20],
+            # The chosen municipality's levy with every record the file has for it.
+            "municipal_levy": municipalities.get(entry.data.get(CONF_MUNICIPALITY) or ""),
             "cantonal_levies": _product_summary(data.get("cantonal", {})),
             "next_period": {
                 "valid_from": next_period.get("valid_from"),

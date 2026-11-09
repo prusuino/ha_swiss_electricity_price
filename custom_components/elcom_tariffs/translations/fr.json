@@ -20,6 +20,13 @@
           "grid_includes_levies": "Le tarif réseau inclut déjà les redevances fédérales"
         }
       },
+      "municipal": {
+        "title": "{operator} : taxe communale de {municipality}",
+        "description": "Le fichier tarifaire de {operator} contient {count} enregistrements de taxes communales pour {municipality}, et le produit tarifaire réseau choisi n'indique pas lequel s'applique. Cochez celui qui figure sur votre facture. Les opérateurs utilisent plusieurs enregistrements pour deux choses différentes : une taxe par niveau de tension ou tranche de consommation (une seule vous concerne alors), ou des taxes distinctes facturées côte à côte (cochez alors toutes celles de votre facture ; elles sont additionnées). Ce choix peut être modifié plus tard dans le dialogue « Configurer ».",
+        "data": {
+          "municipal_levies": "Taxes communales sur ma facture"
+        }
+      },
       "cantonal": {
         "title": "{operator} : taxes cantonales",
         "description": "Le fichier tarifaire de {operator} contient {count} entrées sous taxes cantonales. Cochez celles qui figurent sur votre facture – elles sont alors ajoutées au prix combiné – et, parmi elles, celles que votre facture indique hors TVA (une taxe cantonale comme les 0.6 ct./kWh vaudois est facturée sans TVA, un émolument cantonal avec). Rien n'est présélectionné : les opérateurs placent des choses différentes sous ce titre, certains même les redevances fédérales, déjà couvertes par l'étape précédente – les cocher aussi les compterait deux fois. Les deux choix peuvent être modifiés plus tard dans le dialogue « Configurer » ; chaque entrée reçoit en outre son propre capteur.",
@@ -50,7 +57,8 @@
     "error": {
       "no_matches": "Aucun opérateur ne correspond à cette recherche. Modifiez le texte de recherche ci-dessus et validez à nouveau.",
       "manual_url_needs_operator": "Une URL manuelle a été saisie mais aucun opérateur n'a été sélectionné. Veuillez aussi sélectionner l'opérateur auquel appartient cette URL.",
-      "invalid_time": "Veuillez saisir les heures au format HH:MM (p. ex. 06:00)."
+      "invalid_time": "Veuillez saisir les heures au format HH:MM (p. ex. 06:00).",
+      "choose_levy": "Cochez au moins une taxe communale."
     }
   },
   "options": {
@@ -61,13 +69,14 @@
           "municipality": "Commune",
           "energy_product": "Produit tarifaire énergie",
           "grid_product": "Produit tarifaire réseau",
+          "municipal_levies": "Taxes communales sur ma facture",
           "cantonal_levies": "Taxes cantonales sur ma facture",
           "cantonal_levies_vat_exempt": "Parmi celles-ci, facturées hors TVA",
           "national_levies_rp": "Redevances nationales sur l'électricité (Rp/kWh)",
           "vat_percent": "Taux de TVA (%)",
           "vat_exempt_levies_rp": "Taxes hors TVA (ct./kWh, ajoutées après la TVA)"
         },
-        "description": "Les redevances nationales, le taux de TVA et le montant hors TVA s'appliquent aux capteurs de prix combinés. Pour une entrée basée sur le fichier tarifaire de {operator}, la commune ainsi que les produits tarifaires énergie et réseau peuvent être choisis à nouveau ici dans le fichier actuel : les opérateurs renomment leurs produits ou restructurent leur fichier d'une année à l'autre, et les capteurs de prix combinés restent indisponibles jusqu'à ce que les noms actuels soient choisis. Si le fichier contient des taxes cantonales, cochez celles de votre facture et, parmi elles, celles facturées hors TVA. Chacune de ces modifications recharge l'entrée ; les identifiants d'entités et l'historique sont conservés."
+        "description": "Les redevances nationales, le taux de TVA et le montant hors TVA s'appliquent aux capteurs de prix combinés. Pour une entrée basée sur le fichier tarifaire de {operator}, la commune ainsi que les produits tarifaires énergie et réseau peuvent être choisis à nouveau ici dans le fichier actuel : les opérateurs renomment leurs produits ou restructurent leur fichier d'une année à l'autre, et les capteurs de prix combinés restent indisponibles jusqu'à ce que les noms actuels soient choisis. Si le fichier contient des taxes cantonales, cochez celles de votre facture et, parmi elles, celles facturées hors TVA. Si le fichier contient plusieurs taxes communales pour votre commune, cochez celle(s) de votre facture – elles sont additionnées ; sans choix, l'enregistrement correspondant au produit tarifaire réseau est utilisé lorsque le fichier permet de le reconnaître. Chacune de ces modifications recharge l'entrée ; les identifiants d'entités et l'historique sont conservés."
       }
     },
     "error": {
@@ -82,6 +91,10 @@
     "selection_missing": {
       "title": "{operator} : produit tarifaire ou commune choisis absents du fichier tarifaire",
       "description": "Le fichier tarifaire de {operator} ne contient plus : {missing}. L'opérateur l'a renommé ou supprimé ; les capteurs de prix combinés, le niveau tarifaire et le capteur de tarif haut de cette entrée sont donc indisponibles. Ouvrez le dialogue « Configurer » de l'entrée et choisissez les noms actuels dans la liste ; l'entrée est rechargée et conserve ses identifiants d'entités et son historique."
+    },
+    "municipal_levy_ambiguous": {
+      "title": "{operator} : plusieurs taxes communales pour {municipality} – choisissez la vôtre",
+      "description": "Le fichier tarifaire de {operator} contient plusieurs enregistrements de taxes communales pour {municipality} : {records}. Le fichier n'indique pas lequel correspond à votre produit tarifaire réseau, ou un enregistrement choisi auparavant n'y figure plus. Pour l'instant, le prix est calculé avec : {applied}. Ouvrez le dialogue « Configurer » de l'entrée et cochez la taxe qui figure sur votre facture – plusieurs si votre facture les indique côte à côte ; elles sont additionnées. L'entrée est rechargée et conserve ses identifiants d'entités et son historique."
     }
   },
   "services": {

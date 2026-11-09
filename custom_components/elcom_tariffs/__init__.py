@@ -7,7 +7,13 @@ from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_ENERGY_PRODUCT, CONF_GRID_PRODUCT, CONF_MANUAL_HIGH_RP, DOMAIN
-from .coordinator import ElcomManualTariffCoordinator, ElcomTariffCoordinator, manual_issue_id, selection_issue_id
+from .coordinator import (
+    ElcomManualTariffCoordinator,
+    ElcomTariffCoordinator,
+    levy_issue_id,
+    manual_issue_id,
+    selection_issue_id,
+)
 
 type ElcomConfigEntry = ConfigEntry[ElcomTariffCoordinator | ElcomManualTariffCoordinator]
 from .services import async_register_services
@@ -98,6 +104,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ElcomConfigEntry) -> bo
         # must not leave it behind.
         ir.async_delete_issue(hass, DOMAIN, manual_issue_id(entry))
         ir.async_delete_issue(hass, DOMAIN, selection_issue_id(entry))
+        ir.async_delete_issue(hass, DOMAIN, levy_issue_id(entry))
     return unload_ok
 
 
@@ -105,3 +112,4 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Entry deleted: withdraw the repair issues that belonged to it."""
     ir.async_delete_issue(hass, DOMAIN, manual_issue_id(entry))
     ir.async_delete_issue(hass, DOMAIN, selection_issue_id(entry))
+    ir.async_delete_issue(hass, DOMAIN, levy_issue_id(entry))

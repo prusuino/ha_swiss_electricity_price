@@ -33,8 +33,9 @@ from homeassistant.helpers.selector import (
 from homeassistant.util import dt as dt_util
 
 # Whether the entry's update listener reloads the entry on a change (then a
-# reconfigure must not reload again, see _finish).
-_LISTENER_RELOADS = True
+# reconfigure must not reload again, see _finish). Here it only pushes the
+# data to the entities again, so a reconfigure schedules the reload itself.
+_LISTENER_RELOADS = False
 
 from .const import (
     CONF_CANTONAL_LEVIES,
@@ -48,6 +49,7 @@ from .const import (
     CONF_MANUAL_HIGH_TO,
     CONF_MANUAL_HIGH_WEEKDAYS,
     CONF_MANUAL_LOW_RP,
+    CONF_MUNICIPAL_LEVIES,
     CONF_MUNICIPALITY,
     CONF_NATIONAL_LEVIES_RP,
     CONF_OPERATOR_ID,
@@ -72,6 +74,7 @@ from .directory import (
     async_verify_direct_links,
 )
 from .localization import t
+from .municipal_levy import needs_choice, offers_choice, record_labels
 from .tariff_period import select_current_tariffs
 
 _LOGGER = logging.getLogger(__name__)
@@ -134,6 +137,29 @@ def _list_cantonal(raw: dict) -> dict[str, dict]:
     """The file's cantonal levies valid today, parsed as the coordinator
     will parse them (same names, same rates)."""
     return ElcomTariffCoordinator._parse_tariff_records(_current_tariffs(raw))["cantonal"]
+
+
+def _municipal_levy(raw: dict, municipality: str, grid_product: str) -> dict | None:
+    """The municipality's levy as the coordinator will parse it for this
+    grid product, before any choice of the customer."""
+    if not municipality:
+        return None
+    parsed = ElcomTariffCoordinator._parse_tariff_records(_current_tariffs(raw), grid_product=grid_product)
+    return parsed["municipalities"].get(municipality)
+
+
+def _municipal_selector(levy: dict) -> SelectSelector:
+    """The municipality's levy records for ticking, each with its rate."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                SelectOptionDict(value=key, label=label) for key, label in record_labels(levy["records"]).items()
+            ],
+            multiple=True,
+            mode=SelectSelectorMode.LIST,
+            sort=False,
+        )
+    )
 
 
 def _cantonal_label(name: str, levy: dict) -> str:
@@ -377,6 +403,7 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_ENERGY_PRODUCT: user_input[CONF_ENERGY_PRODUCT],
                     CONF_GRID_PRODUCT: user_input[CONF_GRID_PRODUCT],
                     CONF_GRID_INCLUDES_LEVIES: grid_includes_levies,
+                    CONF_MUNICIPAL_LEVIES: [],
                     CONF_CANTONAL_LEVIES: [],
                     CONF_CANTONAL_LEVIES_VAT_EXEMPT: [],
                 },
@@ -390,9 +417,13 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_VAT_EXEMPT_LEVIES_RP: DEFAULT_VAT_EXEMPT_LEVIES_RP,
                 },
             }
-            if _list_cantonal(self._raw):
-                return await self.async_step_cantonal()
-            return self._create_location_entry()
+            # Several municipal levies and nothing that tells which one
+            # applies: ask. Also when reconfiguring an entry that carries
+            # such a choice, so that it is not dropped silently.
+            levy = _municipal_levy(self._raw, municipality, user_input[CONF_GRID_PRODUCT])
+            if needs_choice(levy) or (offers_choice(levy) and self._kept_municipal_levies(levy)):
+                return await self.async_step_municipal()
+            return await self._async_after_municipal()
 
         fields: dict[Any, Any] = {}
         if municipalities:
@@ -410,6 +441,56 @@ class ElcomTariffConfigFlow(ConfigFlow, domain=DOMAIN):
         assert self._location is not None
         return self._finish(
             title=self._location["title"], data=self._location["data"], options=self._location["options"]
+        )
+
+    def _kept_municipal_levies(self, levy: dict) -> list[str]:
+        """The records the entry being reconfigured has chosen, as far as
+        this municipality still has them."""
+        keys = [record["key"] for record in levy["records"]]
+        return [key for key in self._default(CONF_MUNICIPAL_LEVIES, []) or [] if key in keys]
+
+    async def _async_after_municipal(self):
+        assert self._raw is not None
+        if _list_cantonal(self._raw):
+            return await self.async_step_cantonal()
+        return self._create_location_entry()
+
+    async def async_step_municipal(self, user_input: dict[str, Any] | None = None):
+        """Only where the file lists several municipal levies for the chosen
+        municipality and the grid product does not tell which one applies:
+        the customer ticks the one on the bill, or several that add up.
+        Nothing is preselected for a new entry — a record per voltage
+        level and levies that are charged side by side look the same in
+        the file."""
+        assert self._selected is not None and self._raw is not None and self._location is not None
+        data = self._location["data"]
+        levy = _municipal_levy(self._raw, data[CONF_MUNICIPALITY], data[CONF_GRID_PRODUCT])
+        assert levy is not None
+        labels = record_labels(levy["records"])
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            chosen = [key for key in labels if key in user_input.get(CONF_MUNICIPAL_LEVIES, [])]
+            if not chosen and needs_choice(levy):
+                errors["base"] = "choose_levy"
+            else:
+                data[CONF_MUNICIPAL_LEVIES] = chosen
+                return await self._async_after_municipal()
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_MUNICIPAL_LEVIES, default=self._kept_municipal_levies(levy)
+                ): _municipal_selector(levy)
+            }
+        )
+        return self.async_show_form(
+            step_id="municipal",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "operator": self._selected["name"],
+                "municipality": data[CONF_MUNICIPALITY],
+                "count": str(len(labels)),
+            },
         )
 
     async def async_step_cantonal(self, user_input: dict[str, Any] | None = None):
@@ -555,6 +636,10 @@ class ElcomTariffOptionsFlow(OptionsFlow):
         municipalities = sorted(data.get("municipalities", {}))
         cantonal = data.get("cantonal", {})
         selectable = bool(energy_products and grid_products)
+        # The records of the entry's municipality, where it has several to
+        # choose between (see municipal_levy.py).
+        levy = data.get("municipalities", {}).get(entry.data.get(CONF_MUNICIPALITY) or "")
+        levy_labels = record_labels(levy["records"]) if selectable and offers_choice(levy) else {}
 
         if user_input is not None:
             options = {
@@ -570,6 +655,14 @@ class ElcomTariffOptionsFlow(OptionsFlow):
                 }
                 if municipalities:
                     new_data[CONF_MUNICIPALITY] = user_input[CONF_MUNICIPALITY]
+                if levy_labels or CONF_MUNICIPAL_LEVIES in entry.data:
+                    # The records listed were those of the municipality the
+                    # entry had; another municipality starts without a choice.
+                    same_place = new_data.get(CONF_MUNICIPALITY) == entry.data.get(CONF_MUNICIPALITY)
+                    ticked = user_input.get(CONF_MUNICIPAL_LEVIES, []) if same_place else []
+                    levies = [key for key in levy_labels if key in ticked]
+                    if levies or CONF_MUNICIPAL_LEVIES in entry.data:
+                        new_data[CONF_MUNICIPAL_LEVIES] = levies
                 if cantonal:
                     chosen = [n for n in user_input.get(CONF_CANTONAL_LEVIES, []) if n in cantonal]
                     new_data[CONF_CANTONAL_LEVIES] = chosen
@@ -617,6 +710,9 @@ class ElcomTariffOptionsFlow(OptionsFlow):
             fields[vol.Required(CONF_ENERGY_PRODUCT, default=default)] = selector
             selector, default = _select(grid_products, entry.data.get(CONF_GRID_PRODUCT))
             fields[vol.Required(CONF_GRID_PRODUCT, default=default)] = selector
+            if levy_labels:
+                ticked = [key for key in entry.data.get(CONF_MUNICIPAL_LEVIES) or [] if key in levy_labels]
+                fields[vol.Optional(CONF_MUNICIPAL_LEVIES, default=ticked)] = _municipal_selector(levy)
             if cantonal:
                 chosen = [n for n in entry.data.get(CONF_CANTONAL_LEVIES) or [] if n in cantonal]
                 exempt = [n for n in entry.data.get(CONF_CANTONAL_LEVIES_VAT_EXEMPT) or [] if n in chosen]
