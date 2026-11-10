@@ -8,6 +8,17 @@
 
 A Home Assistant custom integration that works with **any Swiss electricity grid operator**, based on the legally mandated "machine-readable tariffs" data file (ElCom/StromVV requirement).
 
+## Highlights
+
+- **Any Swiss grid operator**: the tariff file is looked up in ElCom's official registry; the operator picker shows which operators report a direct link, and where no link works the file URL or the rates can be entered by hand.
+- **Nothing hardcoded**: every sensor is created from the operator's own file — energy and grid prices, base and metering fees, municipal and cantonal levies.
+- **High and low tariff resolved against the clock**: the current rate, the tariff level with its next change, a high-tariff binary sensor and a tariff calendar.
+- **One price to automate on**: the combined price including levies and VAT, with the hourly curve for today and tomorrow.
+- **Two actions for scripts and Assist**: `elcom_tariffs.get_price` and `elcom_tariffs.get_price_schedule`, the latter with the cheapest hours of a period.
+- **Next year's tariffs ahead of time**: a sensor with the price of the coming tariff period and the change in percent, as soon as the operator publishes it.
+- **Adjustable where your bill differs**: national levies and VAT are numbers you can change.
+- **Guided setup**: search for your operator, then pick municipality and tariff products from the operator's own file; German, English, French and Italian; diagnostics download.
+
 ## Background
 
 Every Swiss electricity distribution grid operator (Verteilnetzbetreiber) is legally required (Art. 7b para. 1 StromVV) to publish a machine-readable JSON file listing all their current tariffs each year, and to report the download link to the Swiss Federal Electricity Commission (ElCom) annually. ElCom publishes this registry as open government data.
