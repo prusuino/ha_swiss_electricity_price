@@ -92,6 +92,10 @@ The `config_entry` field is picked from a list in the UI editor; in YAML it is t
 
 Swiss tariffs are time-of-use schedules, so the price for every hour of today and tomorrow is known in advance and published by the combined price sensor as `raw_today` / `raw_tomorrow`. Replace `<operator>_<id>` with your entry's prefix (see above).
 
+![Example dashboard with the current price, high and low tariff, the next price change, the price curve of the last 48 hours and the price components](docs/dashboard.png)
+
+The screenshot is built from built-in cards only (tile, markdown, history graph); the examples below add the hourly curve for today and tomorrow.
+
 **Price curve, today and tomorrow** ([ApexCharts card](https://github.com/RomRider/apexcharts-card) from the Marketplace):
 
 ```yaml
