@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.2 — 2026-11-19
+
+- The Home Assistant Marketplace lists the integration under *Energy → Energy prices*. The repository is marked as made for Switzerland. Nothing changes in how the integration works.
+
 ## 1.12.1 — 2026-11-09
 
 - **Municipal levy: the network level of the grid tariff product settles the record.** Operators that publish one levy record per network level state the level in the record (`customerVoltageLevel`), and every grid tariff product states it as well. 1.12.0 did not read it, so these municipalities ended in the question which record applies, with the price calculated from the last record in the file — for a household often the one for medium voltage. Now only the records of the grid product's network level count (and those that state none). Where that leaves one rate, it is taken without a question (`resolved_by: voltage_level`). Where several levies remain on the level because they are charged side by side, the setup step, the Configure dialog and the repair issue list those alone instead of the records of every level.

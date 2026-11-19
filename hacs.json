@@ -1,5 +1,6 @@
 {
   "name": "Swiss Electricity Price (ElCom)",
+  "country": "CH",
   "zip_release": true,
   "filename": "elcom_tariffs.zip",
   "render_readme": true,

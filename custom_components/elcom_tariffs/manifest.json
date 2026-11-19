@@ -1,6 +1,7 @@
 {
   "domain": "elcom_tariffs",
   "name": "Swiss Electricity Price (ElCom)",
+  "categories": ["energy.energy_prices"],
   "codeowners": ["@prusuino"],
   "config_flow": true,
   "documentation": "https://github.com/prusuino/ha_swiss_electricity_price",
@@ -9,5 +10,5 @@
   "issue_tracker": "https://github.com/prusuino/ha_swiss_electricity_price/issues",
   "quality_scale": "bronze",
   "requirements": [],
-  "version": "1.12.1"
+  "version": "1.12.2"
 }
