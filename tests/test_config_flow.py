@@ -159,3 +159,6 @@ async def test_reconfigure_switches_the_products(hass: HomeAssistant, enable_cus
     assert entry.data[CONF_ENERGY_PRODUCT] == "Green Energie"
     assert entry.unique_id == f"{OPERATOR_ID}_Musterwil_Green Energie_Basic Netz"
     assert entry.options[CONF_NATIONAL_LEVIES_RP] == 1.5  # the user's options stay
+    # the reload the reconfigure schedules has to finish before the test ends
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_unload(entry.entry_id)
