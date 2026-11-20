@@ -138,3 +138,57 @@ def test_secondary_meter_marker():
     assert is_secondary_meter_fee(SECONDARY) is True
     assert is_secondary_meter_fee(FEES) is False
     assert is_secondary_meter_fee({"tariffName": "Taxe", "comment": "compteur secondaire"}) is True
+
+
+def test_weekdays_of_another_language_than_the_files_are_still_read():
+    # "So" is no English abbreviation, but German for Sunday: taken rather than dropping the window
+    assert normalize_weekdays(["Sa", "So"], "en") == ["Sa", "Su"]
+    assert normalize_weekdays(["Lu", "Ma", "Me", "Je", "Ve"], "de") == ["Mo", "Tu", "We", "Th", "Fr"]
+    assert normalize_weekdays(["Sa.", " di "], "fr") == ["Sa", "Su"]
+    assert normalize_weekdays(["Sa", "Di"], "de") == ["Tu", "Sa"]
+    assert weekday_language([{"weekdays": ["Lu", "Ma", "Me", "Je", "Ve"]}, {"weekdays": ["Sa", "Di"]}]) == "fr"
+
+
+def test_an_unknown_month_makes_the_window_apply_all_year():
+    assert normalize_months(["Jan", "Smarch"]) is None
+    assert normalize_months(["janv.", "fév", "Dez"]) == ["Jan", "Feb", "Dec"]
+
+
+def test_seasonal_windows_apply_in_their_months():
+    winter = ["Okt", "Nov", "Dez", "Jan", "Feb", "Mär"]
+    summer = ["Apr", "Mai", "Jun", "Jul", "Aug", "Sep"]
+    record = {**ENERGY, "prices": {"energy": [
+        {"from": "00:00", "to": "23:59", "months": winter, "price": 0.15},
+        {"from": "00:00", "to": "23:59", "months": summer, "price": 0.10},
+    ]}}
+    product = ElcomTariffCoordinator._parse_time_tariff(record)
+    assert product["windows"][0]["months"] == ["Jan", "Feb", "Mar", "Oct", "Nov", "Dec"]
+    assert product["windows"][1]["to_min"] == 1440  # "23:59" closes the day
+    assert current_rate(product, datetime(2026, 11, 9, 23, 59)) == (15.0, "high")
+    assert current_rate(product, datetime(2026, 7, 9, 12, 0)) == (10.0, "low")
+    # the season changes at midnight, without a from/to boundary of its own
+    assert next_switch_time([product], datetime(2026, 3, 31, 12, 0)) == datetime(2026, 4, 1, 0, 0)
+
+
+def test_a_product_without_windows_has_no_rate():
+    assert current_rate({}, datetime(2026, 11, 9, 10, 0)) == (None, None)
+    assert current_rate({"windows": []}, datetime(2026, 11, 9, 10, 0)) == (None, None)
+
+
+def test_records_of_an_unknown_type_are_left_out():
+    feed_in = {**ENERGY, "tariffType": "feed_in", "tariffName": "Rückliefertarif"}
+    parsed = ElcomTariffCoordinator._parse_tariff_records([ENERGY, GRID, feed_in])
+    assert set(parsed["energy"]) == {"Basic Energie"}
+    assert set(parsed["grid"]) == {"Basic Netz"}
+    assert parsed["metering"] == {} and parsed["municipalities"] == {} and parsed["cantonal"] == {}
+
+
+def test_levies_entered_in_another_unit_are_read_as_rappen():
+    def levy(price):
+        fees = {**FEES, "prices": {"municipalityTaxes": [{"municipalityName": "Musterwil", "municipalityEnergy": [{"price": price}]}]}}
+        return ElcomTariffCoordinator._parse_tariff_records([ENERGY, GRID, fees])["municipalities"]["Musterwil"]["rp_kwh"]
+
+    assert levy(0.0085) == 0.85  # CHF/kWh, as the format wants it
+    assert levy(0.85) == 0.85  # Rp/kWh
+    assert levy(85) == 0.85  # hundredths of a Rappen
+    assert levy(None) == 0.0

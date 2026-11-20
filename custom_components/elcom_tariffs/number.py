@@ -22,6 +22,9 @@ from .const import (
 from .device import device_info, entity_id_prefix
 from .localization import t
 
+# One change at a time.
+PARALLEL_UPDATES = 1
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback

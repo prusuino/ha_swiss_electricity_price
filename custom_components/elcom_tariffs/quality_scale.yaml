@@ -19,7 +19,9 @@ rules:
   docs-removal-instructions: done
   entity-event-setup: done
   entity-unique-id: done
-  has-entity-name: done
+  has-entity-name:
+    status: todo
+    comment: The entities still set has_entity_name to False and carry their full name; changing it renames entities for existing users, so it waits for a release of its own.
   runtime-data:
     status: done
     comment: The entry's coordinator is entry.runtime_data.
@@ -35,11 +37,13 @@ rules:
   entity-unavailable: done
   integration-owner: done
   log-when-unavailable: done
-  parallel-updates: todo
+  parallel-updates: done
   reauthentication-flow:
     status: exempt
     comment: The operators' tariff files and the ElCom directory need no credentials.
-  test-coverage: todo
+  test-coverage:
+    status: done
+    comment: Above 95 % of statements and branches; the test workflow fails below that.
 
   # Gold
   devices: done

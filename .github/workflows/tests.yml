@@ -1,7 +1,8 @@
 name: Tests
 
-# Runs the unit and config-flow tests against the Home Assistant test
-# harness for custom integrations (pytest-homeassistant-custom-component).
+# Runs the tests against the Home Assistant test harness for custom
+# integrations (pytest-homeassistant-custom-component) and fails when
+# they cover less than 95 % of the integration.
 
 on:
   push:
@@ -24,4 +25,4 @@ jobs:
         run: python -m pip install --upgrade pip pytest-homeassistant-custom-component
 
       - name: Run the tests
-        run: python -m pytest -q
+        run: python -m pytest -q --cov=custom_components/elcom_tariffs --cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=95

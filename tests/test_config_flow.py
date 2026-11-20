@@ -40,16 +40,21 @@ RAW = {"tariffs": [
      "prices": {"municipalityTaxes": [{"municipalityName": "Musterwil", "municipalityEnergy": [{"price": 0.005}], "municipalityBase": {"price": 0}}]}},
 ]}
 FLOW = "custom_components.elcom_tariffs.config_flow."
+COORDINATOR = "custom_components.elcom_tariffs.coordinator."
 UNIQUE_ID = f"{OPERATOR_ID}_Musterwil_Basic Energie_Basic Netz"
 
 
 @pytest.fixture
 def fake_network():
+    """The flow's network calls, and the coordinator's for the entry a finished flow sets up."""
     with (
         patch(FLOW + "async_fetch_operator_directory", return_value=OPERATORS),
         patch(FLOW + "async_verify_direct_links", return_value=None),
         patch(FLOW + "async_resolve_tariff_url", side_effect=lambda hass, url: url),
         patch(FLOW + "async_fetch_raw_tariffs", return_value=RAW),
+        patch(COORDINATOR + "async_fetch_operator_url", return_value=None),
+        patch(COORDINATOR + "async_resolve_tariff_url", side_effect=lambda hass, url: url),
+        patch(COORDINATOR + "async_fetch_raw_tariffs", return_value=RAW),
     ):
         yield
 

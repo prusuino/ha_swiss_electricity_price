@@ -18,6 +18,9 @@ from .device import device_info, entity_id_prefix
 from .localization import t
 from .price_schedule import level_at, level_change_attributes, localized
 
+# Read from the coordinator; nothing is requested per entity.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: ElcomTariffCoordinator = entry.runtime_data

@@ -60,6 +60,9 @@ _FEE_UNITS = {
     "CHF/DAY": "CHF/day",
 }
 
+# Read from the coordinator; nothing is requested per entity.
+PARALLEL_UPDATES = 0
+
 
 def _fee_unit(raw: str | None) -> str:
     """Display unit of a flat fee; CHF/month when the file names none."""
