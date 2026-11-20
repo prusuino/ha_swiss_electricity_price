@@ -51,7 +51,7 @@ class _OptionNumber(NumberEntity):
     than polled: the state is rewritten right after a write here and
     whenever the entry is updated elsewhere (the options dialog)."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_mode = NumberMode.BOX
     _attr_should_poll = False
 

@@ -40,7 +40,7 @@ class ElcomHighTariffBinarySensor(CoordinatorEntity[ElcomTariffCoordinator], Bin
     entered rates) is on its high rate — resolved against the clock on
     every read, refreshed at every window boundary like the sensors."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(
         self,

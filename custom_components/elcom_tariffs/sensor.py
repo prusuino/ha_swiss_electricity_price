@@ -183,7 +183,7 @@ class ElcomTariffSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity)
     coordinator rewrites the state at every window boundary), not frozen at
     fetch time."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "CHF/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:flash"
@@ -234,7 +234,7 @@ class ElcomTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEn
     """Fixed high-tariff or low-tariff reference price of a tariff product
     (independent of the current time)."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "CHF/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:flash-outline"
@@ -287,7 +287,7 @@ class ElcomBaseFeeSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity
     enabled in their entity settings. The fee is not part of the per-kWh
     price sensors, which is why it is a separate entity."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_icon = "mdi:cash"
 
     def __init__(
@@ -376,7 +376,7 @@ class _ElcomDiagnosticSensorBase(CoordinatorEntity[ElcomTariffCoordinator], Sens
     sensor), so they show up as separate rows under the device's
     Diagnostics section."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
@@ -485,7 +485,7 @@ class ElcomTariffStatusSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
     """Shows whether the configured customer tariff is currently on high or
     low tariff — resolved against the clock on every read."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_icon = "mdi:clock-time-eight-outline"
 
     def __init__(
@@ -527,7 +527,7 @@ class ElcomTariffStatusSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
 class ElcomMeteringSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
     """Fixed metering fee (CHF/month as a rule; the unit follows the operator's file)."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_icon = "mdi:meter-electric"
 
     def __init__(
@@ -571,7 +571,7 @@ class ElcomMeteringSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntit
 class ElcomMunicipalityLevySensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
     """Municipality levy (Rp/kWh) for a single municipality served by the operator."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "Rp/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:town-hall"
@@ -627,7 +627,7 @@ class ElcomCantonalLevySensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
     against a bill; only the chosen ones, or all of them when the file
     has a handful, start enabled."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "Rp/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:bank"
@@ -739,7 +739,7 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
     energy and grid rates are the ones active right now (resolved on every
     read)."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "CHF/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:cash-multiple"
@@ -816,7 +816,7 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
     """Combined high-tariff or low-tariff reference price (fixed, independent
     of the current time)."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "CHF/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:cash-multiple"
@@ -888,7 +888,7 @@ class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], Sens
     change in percent. Unavailable while the file holds no upcoming set
     or the configured products are not in it."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "CHF/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:calendar-arrow-right"
@@ -999,7 +999,7 @@ class ElcomManualTariffLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], Se
     """Shows whether the manually entered tariff is currently on high or low
     tariff — resolved against the clock on every read."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_icon = "mdi:clock-time-eight-outline"
 
     def __init__(
@@ -1032,7 +1032,7 @@ class ElcomManualPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], S
     """Combined current price for a manually entered tariff, including
     national levies and VAT."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "CHF/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:cash-multiple"
@@ -1082,7 +1082,7 @@ class ElcomManualPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
     """Combined fixed high-tariff or low-tariff reference price for a
     manually entered tariff (same formula, fixed rate instead of current)."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "CHF/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:cash-multiple"
@@ -1111,7 +1111,7 @@ class ElcomManualPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], Sen
 class ElcomManualGridFeeSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEntity):
     """Manually entered monthly grid/metering fee."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "CHF/month"
     _attr_icon = "mdi:meter-electric"
 

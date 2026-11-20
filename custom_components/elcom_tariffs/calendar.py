@@ -37,7 +37,7 @@ class ElcomTariffCalendar(CoordinatorEntity[ElcomTariffCoordinator], CalendarEnt
     level ("High tariff"/"Low tariff"), the description the combined
     price in force during that stretch."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_icon = "mdi:calendar-clock"
 
     def __init__(self, hass: HomeAssistant, coordinator: ElcomTariffCoordinator, entry: ConfigEntry, prefix: str) -> None:
