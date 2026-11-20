@@ -26,6 +26,7 @@ from .const import CONF_ENERGY_PRODUCT, CONF_GRID_PRODUCT, CONF_MANUAL_HIGH_RP, 
 from .coordinator import current_rate, next_switch_time
 from .levies import Levies, entry_levies
 from .localization import tariff_level_text
+from .municipal_levy import levy_of_entry
 
 # (combined price in CHF/kWh or None, canonical tariff-level key or None) at a moment
 PriceAt = Callable[[datetime], tuple[float | None, str | None]]
@@ -92,14 +93,10 @@ def entry_price_at(coordinator, entry) -> tuple[PriceAt, list[dict]] | None:
     grid = data.get("grid", {}).get(entry.data.get(CONF_GRID_PRODUCT))
     if not energy or not grid:
         return None
-    municipalities = data.get("municipalities", {})
-    municipality_rp = 0.0
-    if municipalities:
-        levy = municipalities.get(entry.data.get(CONF_MUNICIPALITY, ""))
-        if levy is None:
-            return None
-        municipality_rp = levy.get("rp_kwh") or 0.0
-    return combined_price_at(energy, grid, municipality_rp, levies), [energy, grid]
+    levy = levy_of_entry(data, entry.data.get(CONF_MUNICIPALITY, ""))
+    if levy is None:
+        return None
+    return combined_price_at(energy, grid, levy.get("rp_kwh") or 0.0, levies), [energy, grid]
 
 
 def entry_level_product(coordinator, entry) -> dict | None:

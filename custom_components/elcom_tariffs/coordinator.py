@@ -62,7 +62,7 @@ from .const import (
 )
 from .directory import async_fetch_operator_url, async_resolve_tariff_url
 from .localization import t
-from .municipal_levy import applied_text, assign_keys, choice_records, needs_choice, record_labels
+from .municipal_levy import applied_text, assign_keys, choice_records, is_levy_product, needs_choice, record_labels
 from .municipal_levy import resolve as resolve_municipal_levy
 from .tariff_period import (
     is_secondary_meter_fee,
@@ -496,6 +496,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                 "grid": grid_tariffs,
                 "metering": metering_tariffs,
                 "municipalities": municipalities,
+                "product_levy": parsed["product_levy"],
                 "cantonal": cantonal,
                 "next_period": next_period,
             }
@@ -704,6 +705,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         return self._parse_tariff_records(
             tariffs,
             grid_product=data.get(CONF_GRID_PRODUCT),
+            energy_product=data.get(CONF_ENERGY_PRODUCT),
             municipality=data.get(CONF_MUNICIPALITY),
             municipal_levies=data.get(CONF_MUNICIPAL_LEVIES),
         )
@@ -714,6 +716,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         tariffs: list[dict],
         *,
         grid_product: str | None = None,
+        energy_product: str | None = None,
         municipality: str | None = None,
         municipal_levies: list[str] | None = None,
     ) -> dict:
@@ -724,13 +727,21 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
         A municipality can have a levy in several records; which of them
         apply is resolved with the customer type and the network level of
         `grid_product` and, for `municipality` alone, with the customer's
-        own choice `municipal_levies` (see municipal_levy.py)."""
+        own choice `municipal_levies` (see municipal_levy.py).
+
+        A set without any `regional_fees` record can still carry the levy,
+        published as a product: `product_levy` holds it then (None
+        otherwise). The record stays among the products, marked
+        `municipal_levy`, so that its sensor stays; a product the entry
+        itself is set to is never counted a second time as its levy."""
         energy_tariffs: dict[str, dict] = {}
         grid_tariffs: dict[str, dict] = {}
         metering_tariffs: dict[str, dict] = {}
         levy_records: dict[str, list[dict]] = {}
         cantonal: dict[str, dict] = {}
         secondary_meter_records: dict[str, list[dict]] = {}
+        levy_products: list[tuple[str, dict]] = []
+        has_regional_fees = False
         for t in tariffs:
             ttype = t.get("tariffType")
             name = t.get("tariffName", "")
@@ -744,7 +755,10 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                     # not offered or shown.
                     _LOGGER.debug("Skipping %s product %r: no price windows", ttype, name)
                     continue
-                (energy_tariffs if ttype == "electricity" else grid_tariffs)[name] = cls._parse_time_tariff(t)
+                parsed_product = cls._parse_time_tariff(t)
+                (energy_tariffs if ttype == "electricity" else grid_tariffs)[name] = parsed_product
+                if is_levy_product(t):
+                    levy_products.append((name, parsed_product))
             elif ttype == "metering":
                 base = t.get("prices", {}).get("base", {})
                 metering_tariffs[name] = {
@@ -755,6 +769,7 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                     "valid_to": t.get("endDate"),
                 }
             elif ttype == "regional_fees":
+                has_regional_fees = True
                 for m in t.get("prices", {}).get("municipalityTaxes", []):
                     mname = m.get("municipalityName")
                     if not mname:
@@ -795,11 +810,24 @@ class ElcomTariffCoordinator(_ElcomBaseCoordinator):
                 municipal_levies if mname == municipality else None,
                 grid.get("voltage_level"),
             )
+        product_levy = None
+        if not has_regional_fees:
+            for _name, parsed_product in levy_products:
+                parsed_product["municipal_levy"] = True
+            counted = [(n, p) for n, p in levy_products if n not in (energy_product, grid_product)]
+            if counted:
+                product_levy = {
+                    "rp_kwh": round(sum(p["windows"][0]["rp_kwh"] for _n, p in counted), 3),
+                    "product_name": " + ".join(n for n, _p in counted),
+                    "valid_from": counted[0][1].get("valid_from"),
+                    "valid_to": counted[0][1].get("valid_to"),
+                }
         return {
             "energy": energy_tariffs,
             "grid": grid_tariffs,
             "metering": metering_tariffs,
             "municipalities": municipalities,
+            "product_levy": product_levy,
             "cantonal": cantonal,
         }
 

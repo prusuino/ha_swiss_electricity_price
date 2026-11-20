@@ -65,6 +65,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "municipality_names_sample": sorted(municipalities)[:20],
             # The chosen municipality's levy with every record the file has for it.
             "municipal_levy": municipalities.get(entry.data.get(CONF_MUNICIPALITY) or ""),
+            # The levy of an operator without a municipality section, published as a product.
+            "product_levy": data.get("product_levy"),
             "cantonal_levies": _product_summary(data.get("cantonal", {})),
             "next_period": {
                 "valid_from": next_period.get("valid_from"),

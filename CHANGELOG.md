@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **A municipal levy published as a product is added to the price.** A few operators have no municipality section in their file and list the levy for their municipality as a product of its own instead ("Abgabe an die Gemeinde", one rate around the clock). It showed as a sensor but was missing in the combined price. The integration now takes such a record for what it is: its rate is in every combined price (`municipality_rp_kwh`, and named in `calculation`), and it is no longer offered as an energy or grid product at setup. Only where the file has no municipality section and the record's name says so outright; files with a municipality section are read exactly as before. The record's own sensor stays. Reported by @kunoGit (#10).
+
 ## 1.12.2 — 2026-11-19
 
 - The Home Assistant Marketplace lists the integration under *Energy → Energy prices*. The repository is marked as made for Switzerland. Nothing changes in how the integration works.

@@ -32,7 +32,7 @@ from .device import device_info, entity_id_prefix
 from .levies import Levies, entry_levies
 from .levies import level_rp as _level_rp
 from .localization import t, tariff_level_text
-from .municipal_levy import levy_attributes
+from .municipal_levy import levy_attributes, levy_of_entry
 from .price_schedule import (
     combined_price_at,
     level_at,
@@ -721,15 +721,10 @@ def _calculation_components(coordinator: ElcomTariffCoordinator, entry: ConfigEn
     municipality = entry.data.get(CONF_MUNICIPALITY, "")
     energy = data.get("energy", {}).get(entry.data[CONF_ENERGY_PRODUCT])
     grid = data.get("grid", {}).get(entry.data[CONF_GRID_PRODUCT])
-    municipalities = data.get("municipalities", {})
-    if municipalities:
-        # The chosen municipality vanished from the file: unavailable, not a price without its levy.
-        municipality_data = municipalities.get(municipality)
-    else:
-        # The file carries no municipality section at all (some operators
-        # publish none, others drop it from one year to the next): no
-        # municipal levy is added.
-        municipality_data = {"rp_kwh": 0.0}
+    # None when the chosen municipality vanished from the file: unavailable,
+    # not a price without its levy. A file without a municipality section
+    # gives the levy it publishes as a product, or none.
+    municipality_data = levy_of_entry(data, municipality)
     if not energy or not grid or not municipality_data:
         return None
     return {"energy": energy, "grid": grid, "municipality": municipality_data}
@@ -798,7 +793,7 @@ class ElcomPriceCurrentSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorE
                 breakdown,
                 energy_product=self._entry.data[CONF_ENERGY_PRODUCT],
                 grid_product=self._entry.data[CONF_GRID_PRODUCT],
-                municipality=self._entry.data.get(CONF_MUNICIPALITY, ""),
+                municipality=self._entry.data.get(CONF_MUNICIPALITY) or c["municipality"].get("product_name", ""),
             ),
             "tariff_level": tariff_level_text(energy_level, self._hass_ref),
             # None for entries created before 1.5.0 (the choice did not exist yet).
@@ -877,7 +872,7 @@ class ElcomPriceLevelSensor(CoordinatorEntity[ElcomTariffCoordinator], SensorEnt
             breakdown,
             energy_product=self._entry.data[CONF_ENERGY_PRODUCT],
             grid_product=self._entry.data[CONF_GRID_PRODUCT],
-            municipality=self._entry.data.get(CONF_MUNICIPALITY, ""),
+            municipality=self._entry.data.get(CONF_MUNICIPALITY) or c["municipality"].get("product_name", ""),
         )
 
 
@@ -920,8 +915,7 @@ class ElcomNextPeriodPriceSensor(CoordinatorEntity[ElcomTariffCoordinator], Sens
         if not energy or not grid:
             return None
         municipality = self._entry.data.get(CONF_MUNICIPALITY, "")
-        municipalities = upcoming.get("municipalities") or data.get("municipalities", {})
-        levy = municipalities.get(municipality) if municipalities else {"rp_kwh": 0.0}
+        levy = levy_of_entry(upcoming, municipality, data)
         if levy is None:
             return None
         cantonal_source = upcoming if upcoming.get("cantonal") else data

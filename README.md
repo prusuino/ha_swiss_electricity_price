@@ -222,6 +222,10 @@ The federal levies — grid surcharge (Art. 35 EnG, 2.30 Rp/kWh in 2026), Swissg
 
 How to tell: take one bill and look at the energy-dependent grid line. If the bill lists the grid surcharge, system services and electricity reserve as separate lines next to it, the grid price in the file is most likely net of them — untick the option (or set the national-levies number to 3.03). If no such lines exist and the grid price on the bill matches the file, keep the option ticked (levies 0). Either way, the `calculation` attribute of the combined price sensor spells out every component, and the amount can be changed at any time in the Configure dialog. Entries created before 1.5.0 keep their 3.03 Rp/kWh; set the number to 0 if your bill says the price is too high by that amount.
 
+### A municipal levy published as a product
+
+A few operators have no municipality section at all and list the levy as a product of its own ("Abgabe an die Gemeinde", one rate around the clock, for every customer). Where the file has no municipality section and a record's name says so outright, the integration adds its rate to every combined price as the municipal levy and does not offer it as an energy or grid product; the `calculation` attribute names the record.
+
 ### Several municipal levies for one municipality
 
 Most operators publish one municipal levy per municipality. Some publish several (25 of the 203 machine-readable files checked in 11/2026), and they do not all mean the same by it:

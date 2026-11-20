@@ -74,7 +74,7 @@ from .directory import (
     async_verify_direct_links,
 )
 from .localization import t
-from .municipal_levy import choice_records, needs_choice, offers_choice, record_labels
+from .municipal_levy import choice_records, is_levy_product, needs_choice, offers_choice, record_labels
 from .tariff_period import select_current_tariffs
 
 _LOGGER = logging.getLogger(__name__)
@@ -102,6 +102,13 @@ def _current_tariffs(raw: dict) -> list[dict]:
     return select_current_tariffs(raw.get("tariffs", []), dt_util.now().date())[0]
 
 
+def _choosable(products: dict, chosen: str | None) -> list[str]:
+    """The parsed products on offer in the Configure dialog: all of them
+    but a municipal levy published as a product, unless the entry is
+    already set to it."""
+    return [name for name, product in products.items() if not product.get("municipal_levy") or name == chosen]
+
+
 def _list_products(raw: dict, tariff_type: str) -> list[str]:
     """Tariff product names (tariffName, verbatim) of the given type
     (electricity or grid) — used to let the user pick their own energy and
@@ -112,8 +119,12 @@ def _list_products(raw: dict, tariff_type: str) -> list[str]:
     between an operator's own energy and grid product, and two different
     energy products can share one customerType)."""
     names: list[str] = []
-    for tariff in _current_tariffs(raw):
-        if tariff.get("tariffType") != tariff_type:
+    current = _current_tariffs(raw)
+    # Without a municipality section, a record named as the municipal levy
+    # is that levy and not a product to choose (see municipal_levy.py).
+    levy_as_product = not any(t.get("tariffType") == "regional_fees" for t in current)
+    for tariff in current:
+        if tariff.get("tariffType") != tariff_type or (levy_as_product and is_levy_product(tariff)):
             continue
         name = tariff.get("tariffName", "")
         if name and name not in names:
@@ -633,8 +644,8 @@ class ElcomTariffOptionsFlow(OptionsFlow):
         data: dict = {}
         if CONF_MANUAL_HIGH_RP not in entry.data and coordinator is not None and coordinator.data:
             data = coordinator.data
-        energy_products = list(data.get("energy", {}))
-        grid_products = list(data.get("grid", {}))
+        energy_products = _choosable(data.get("energy", {}), entry.data.get(CONF_ENERGY_PRODUCT))
+        grid_products = _choosable(data.get("grid", {}), entry.data.get(CONF_GRID_PRODUCT))
         municipalities = sorted(data.get("municipalities", {}))
         cantonal = data.get("cantonal", {})
         selectable = bool(energy_products and grid_products)

@@ -27,6 +27,7 @@ is used and the caller raises a repair issue asking for that choice.
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
 
 # How the levy of a municipality was arrived at (`resolved_by`).
@@ -35,6 +36,42 @@ RESOLVED_CUSTOMER_TYPE = "customer_type"
 RESOLVED_VOLTAGE_LEVEL = "voltage_level"
 RESOLVED_SELECTION = "selection"
 UNRESOLVED = "unresolved"
+
+# A few operators have no `regional_fees` record and publish the levy for
+# their one municipality as a product instead ("Abgabe an die Gemeinde",
+# one rate around the clock, for every customer). Only a name that says
+# so outright counts: the levy is added to every price of the entry.
+_LEVY_PRODUCT = re.compile(
+    r"abgaben?\s+(an\s+)?(die\s+)?gemeinden?|gemeindeabgaben?"
+    r"|(redevances?|taxes?)\s+communales?|(tass[ae]|tribut[oi])\s+comunal[ei]",
+    re.IGNORECASE,
+)
+
+
+def is_levy_product(record: dict) -> bool:
+    """An electricity or grid record of the operator's file that is the
+    municipal levy rather than a product: named as one, not a standard
+    product, and one rate above zero at every hour."""
+    if record.get("tariffType") not in ("electricity", "grid") or record.get("standardBasegroup"):
+        return False
+    if not _LEVY_PRODUCT.search(str(record.get("tariffName") or "")):
+        return False
+    prices = {w.get("price") for w in record.get("prices", {}).get("energy") or []}
+    return len(prices) == 1 and isinstance(next(iter(prices)), (int, float)) and next(iter(prices)) > 0
+
+
+def levy_of_entry(data: dict, municipality: str | None, fallback: dict | None = None) -> dict | None:
+    """The municipal levy on the prices of an entry, out of one parsed set
+    of records. With a municipality section: the levy of the entry's
+    municipality, None when that one is gone. Without: the levy the
+    operator publishes as a product, and failing that none at all (some
+    operators publish no municipality section, others drop it from one
+    year to the next). `fallback` is the set to turn to where this one
+    has neither (today's, for next year's preview)."""
+    municipalities = data.get("municipalities") or (fallback or {}).get("municipalities") or {}
+    if municipalities:
+        return municipalities.get(municipality or "")
+    return data.get("product_levy") or (fallback or {}).get("product_levy") or {"rp_kwh": 0.0}
 
 
 def normalize_customer_type(value) -> str:
