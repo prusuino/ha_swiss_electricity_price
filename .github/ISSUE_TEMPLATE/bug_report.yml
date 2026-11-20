@@ -18,7 +18,7 @@ body:
     attributes:
       label: Version of Swiss Electricity Price (ElCom)
       description: Settings → Devices & services → Swiss Electricity Price (ElCom), or the Marketplace / HACS entry.
-      placeholder: "1.12.3"
+      placeholder: "1.13.0"
     validations:
       required: true
   - type: input
